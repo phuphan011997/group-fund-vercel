@@ -46,6 +46,23 @@ const strip = (arr) => arr.map((doc) => {
   return { id: _id, ...rest };
 });
 
+// Tuỳ phiên bản runtime, Vercel truyền tham số catch-all lúc là mảng
+// ["trips","trip-1","state"], lúc là chuỗi "trips/trip-1/state".
+// Hàm này nhận cả hai, và tự đọc từ req.url nếu không có tham số nào.
+function pathParts(req) {
+  let raw = [].concat((req.query && req.query.path) || []);
+  if (raw.length === 1 && String(raw[0]).indexOf("/") !== -1) {
+    raw = String(raw[0]).split("/");
+  }
+  if (!raw.length) {
+    const p = String(req.url || "").split("?")[0].replace(/^\/+/, "").replace(/^api\/?/, "");
+    raw = p ? p.split("/") : [];
+  }
+  return raw.filter(Boolean).map(function (x) {
+    try { return decodeURIComponent(x); } catch (e) { return x; }
+  });
+}
+
 module.exports = async function handler(req, res) {
   // App và API cùng một tên miền nên không cần CORS.
   // Nếu bạn host app ở nơi khác, mở dòng dưới và điền địa chỉ đó.
@@ -56,7 +73,7 @@ module.exports = async function handler(req, res) {
 
   // /api/health — kiểm tra nhanh, không cần token.
   // Mở thẳng trên trình duyệt để biết hỏng ở khâu nào.
-  const rawPath = [].concat(req.query.path || []);
+  const rawPath = pathParts(req);
   if (rawPath[0] === "health") {
     const out = {
       route: "ok",
@@ -86,7 +103,7 @@ module.exports = async function handler(req, res) {
   // /api/trips/:tripId/... → ["trips", tripId, ...]
   const parts = rawPath;
   if (parts[0] !== "trips" || !parts[1]) {
-    return res.status(404).json({ error: "not_found" });
+    return res.status(404).json({ error: "not_found", seen: parts, url: req.url });
   }
   const tripId = parts[1];
   const rest = parts.slice(2);

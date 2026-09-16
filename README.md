@@ -7,7 +7,8 @@ API chạy dạng serverless trên Vercel, giao diện tối ưu cho điện tho
 
 ```
 index.html              giao diện, chạy thẳng trên trình duyệt, không cần build
-api/[...path].js        toàn bộ API, chạy như một serverless function
+api/index.js            toàn bộ API, chạy như một serverless function
+vercel.json             chuyển mọi đường dẫn /api/* về function trên
 mongodb-setup.js         script tạo collection, validator và index trên Atlas
 package.json
 ```
@@ -69,7 +70,7 @@ mã truy cập và cho biết hỏng ở khâu nào:
 
 | Kết quả | Nghĩa là | Cách sửa |
 |---|---|---|
-| Trang 404 của Vercel | function không được nhận diện | Kiểm tra file có đúng tên `api/[...path].js` với dấu ngoặc vuông và ba chấm, nằm trong thư mục `api/` ở gốc repo |
+| Trang 404 của Vercel | function không được nhận diện | Kiểm tra `api/index.js` và `vercel.json` đều có trong repo trên GitHub (xem trực tiếp trên web GitHub cho chắc) |
 | `hasMongoUri: false` hoặc `hasAppToken: false` | thiếu biến môi trường | Thêm biến trên Vercel rồi **Redeploy** — biến mới không tự áp dụng cho bản đã deploy |
 | `db: "loi"` kèm `dbError` nhắc timeout | Atlas chặn IP | Network Access thêm `0.0.0.0/0` |
 | `db: "loi"` kèm `dbError` nhắc authentication | sai user/mật khẩu | Kiểm tra lại chuỗi kết nối, mật khẩu có ký tự đặc biệt phải mã hoá URL |

@@ -1,5 +1,6 @@
 // ============================================================
-//  /api/[...path].js — toàn bộ API chạy trong một serverless function
+//  /api/index.js — toàn bộ API chạy trong một serverless function.
+//  vercel.json chuyển mọi đường dẫn /api/* về đây kèm tham số ?path=
 //
 //  Các đường dẫn xử lý:
 //    GET    /api/trips/:tripId/state          đọc toàn bộ dữ liệu chuyến
@@ -46,9 +47,8 @@ const strip = (arr) => arr.map((doc) => {
   return { id: _id, ...rest };
 });
 
-// Tuỳ phiên bản runtime, Vercel truyền tham số catch-all lúc là mảng
-// ["trips","trip-1","state"], lúc là chuỗi "trips/trip-1/state".
-// Hàm này nhận cả hai, và tự đọc từ req.url nếu không có tham số nào.
+// Đường dẫn tới qua tham số ?path=trips/trip-1/state do vercel.json chuyển sang.
+// Hàm này nhận cả dạng chuỗi lẫn dạng mảng, và tự đọc từ req.url nếu thiếu cả hai.
 function pathParts(req) {
   let raw = [].concat((req.query && req.query.path) || []);
   if (raw.length === 1 && String(raw[0]).indexOf("/") !== -1) {

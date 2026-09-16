@@ -94,19 +94,20 @@ module.exports = async function handler(req, res) {
     return res.status(200).json(out);
   }
 
-  const token = process.env.APP_TOKEN;
-  if (!token) return res.status(500).json({ error: "server_misconfigured" });
-  if ((req.headers.authorization || "") !== "Bearer " + token) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
+  // Hai mã truy cập: ADMIN_TOKEN được quản lý chuyến, APP_TOKEN chỉ nhập liệu.
+  const memberToken = process.env.APP_TOKEN;
+  const adminToken = process.env.ADMIN_TOKEN || "";
+  if (!memberToken) return res.status(500).json({ error: "server_misconfigured" });
 
-  // /api/trips/:tripId/... → ["trips", tripId, ...]
+  const given = (req.headers.authorization || "").replace(/^Bearer\s+/, "");
+  let role = null;
+  if (adminToken && given === adminToken) role = "admin";
+  else if (given === memberToken) role = "member";
+  if (!role) return res.status(401).json({ error: "unauthorized" });
+
+  const settings = () => db.collection("settings");
+
   const parts = rawPath;
-  if (parts[0] !== "trips" || !parts[1]) {
-    return res.status(404).json({ error: "not_found", seen: parts, url: req.url });
-  }
-  const tripId = parts[1];
-  const rest = parts.slice(2);
 
   let db;
   try {
@@ -117,6 +118,50 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    // ---- thông tin phiên: vai trò và chuyến đang mở ----
+    if (req.method === "GET" && parts[0] === "session" && parts.length === 1) {
+      const s = await settings().findOne({ _id: "app" });
+      return res.status(200).json({
+        role: role,
+        activeTripId: (s && s.activeTripId) || null
+      });
+    }
+
+    // ---- danh sách chuyến, chỉ admin ----
+    if (req.method === "GET" && parts[0] === "trips" && parts.length === 1) {
+      if (role !== "admin") return res.status(403).json({ error: "forbidden" });
+      const [list, s] = await Promise.all([
+        db.collection("trips").find({}).sort({ updatedAt: -1 }).limit(100).toArray(),
+        settings().findOne({ _id: "app" })
+      ]);
+      return res.status(200).json({
+        activeTripId: (s && s.activeTripId) || null,
+        trips: list.map((t) => ({ id: t._id, name: t.name, updatedAt: t.updatedAt || null }))
+      });
+    }
+
+    // ---- đặt chuyến đang mở cho cả nhóm, chỉ admin ----
+    if (req.method === "PUT" && parts[0] === "active-trip" && parts.length === 1) {
+      if (role !== "admin") return res.status(403).json({ error: "forbidden" });
+      const b = readBody(req);
+      if (!b.tripId) return res.status(400).json({ error: "missing_tripId" });
+      const exists = await db.collection("trips").findOne({ _id: b.tripId });
+      if (!exists) return res.status(404).json({ error: "trip_not_found" });
+      await settings().updateOne(
+        { _id: "app" },
+        { $set: { activeTripId: b.tripId, updatedAt: new Date() } },
+        { upsert: true }
+      );
+      return res.status(204).end();
+    }
+
+    if (parts[0] !== "trips" || !parts[1]) {
+      return res.status(404).json({ error: "not_found", seen: parts, url: req.url });
+    }
+    // /api/trips/:tripId/... → ["trips", tripId, ...]
+    const tripId = parts[1];
+    const rest = parts.slice(2);
+
     // ---- đọc toàn bộ trạng thái ----
     if (req.method === "GET" && rest[0] === "state" && rest.length === 1) {
       const [trip, members, expenses, plans, logs] = await Promise.all([
@@ -140,6 +185,9 @@ module.exports = async function handler(req, res) {
     // ---- ghi thông tin chung của chuyến ----
     if (req.method === "PUT" && rest[0] === "meta" && rest[1] === "trip") {
       const b = readBody(req);
+      const existing = await db.collection("trips").findOne({ _id: tripId });
+      // Tạo chuyến mới là việc của admin; thành viên chỉ sửa được chuyến đã có.
+      if (!existing && role !== "admin") return res.status(403).json({ error: "forbidden" });
       await db.collection("trips").updateOne(
         { _id: tripId },
         {

@@ -111,6 +111,17 @@ ensure("logs", {
   }
 });
 
+// ---------- settings: chuyến đang mở cho cả nhóm ----------
+ensure("settings", {
+  bsonType: "object",
+  required: ["_id"],
+  properties: {
+    _id:          { bsonType: "string", description: "luôn là 'app'" },
+    activeTripId: { bsonType: ["string", "null"], description: "chuyến admin đang mở cho cả nhóm" },
+    updatedAt:    { bsonType: ["date", "long", "double", "int"] }
+  }
+});
+
 // ---------- index ----------
 d.members.createIndex({ tripId: 1, createdAt: 1 });
 d.expenses.createIndex({ tripId: 1, createdAt: -1 });
@@ -133,6 +144,10 @@ const TRIP_ID = "trip-1";
 if (!d.trips.findOne({ _id: TRIP_ID })) {
   d.trips.insertOne({ _id: TRIP_ID, name: "Quỹ nhóm", holderId: null, note: "", updatedAt: new Date() });
   print("• đã tạo chuyến mẫu: " + TRIP_ID);
+}
+if (!d.settings.findOne({ _id: "app" })) {
+  d.settings.insertOne({ _id: "app", activeTripId: TRIP_ID, updatedAt: new Date() });
+  print("• đặt chuyến đang mở: " + TRIP_ID);
 }
 
 print("\nXong. Database: " + DB_NAME);

@@ -44,7 +44,8 @@ git push -u origin main
    | Tên | Giá trị |
    |---|---|
    | `MONGODB_URI` | chuỗi kết nối Atlas, nhớ thêm `/group_fund` trước dấu `?` |
-   | `APP_TOKEN` | một chuỗi ngẫu nhiên bạn tự đặt, ví dụ `trip-2026-xyz789` |
+   | `APP_TOKEN` | mã cho thành viên, một chuỗi ngẫu nhiên bạn tự đặt |
+   | `ADMIN_TOKEN` | mã cho người quản lý, **phải khác** `APP_TOKEN` |
 
 4. Bấm **Deploy**.
 
@@ -56,12 +57,29 @@ node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
 
 ## Bước 4 — dùng
 
-Mở địa chỉ Vercel cấp cho bạn. Lần đầu app hỏi **mã truy cập**, nhập đúng chuỗi
-`APP_TOKEN` ở trên. Máy đó sẽ nhớ, lần sau không hỏi lại. Gửi link kèm mã cho
-những người trong nhóm, ai cũng nhập được dữ liệu và thấy cập nhật của nhau
-sau vài giây.
+Mở địa chỉ Vercel cấp cho bạn. Lần đầu app hỏi **mã truy cập**. Có hai mã:
+
+- Nhập `APP_TOKEN` → vào với tư cách **thành viên**: nhập liệu bình thường, không
+  thấy nút quản lý chuyến.
+- Nhập `ADMIN_TOKEN` → vào với tư cách **quản lý**: header hiện thêm nút `⇄` để
+  xem danh sách chuyến, tạo chuyến mới, và chọn chuyến nào đang mở.
+
+Máy đó sẽ nhớ mã, lần sau không hỏi lại. Gửi link kèm `APP_TOKEN` cho mọi người
+trong nhóm, giữ `ADMIN_TOKEN` cho riêng bạn.
 
 Nếu ai đó nhập sai mã, app báo ngay và không đọc được gì.
+
+## Nhiều chuyến đi
+
+Cả nhóm dùng chung một link, chuyến nào đang mở do admin quyết định và lưu trên
+server. Admin bấm `⇄`, chọn chuyến khác hoặc tạo chuyến mới, mọi người đang mở app
+sẽ tự chuyển theo trong khoảng 6 giây mà không cần deploy lại hay đổi link.
+
+Dữ liệu các chuyến tách biệt hoàn toàn nhờ trường `tripId`, chuyển qua lại bao nhiêu
+lần cũng không mất gì. Mã chuyến sinh tự động từ tên, ví dụ "Đà Lạt tháng 10" thành
+`da-lat-thang-10-k3f9`.
+
+Thành viên thường không tạo hay chuyển chuyến được; API trả về 403 nếu thử.
 
 ## Khi app báo mất kết nối
 
@@ -74,21 +92,19 @@ mã truy cập và cho biết hỏng ở khâu nào:
 | `hasMongoUri: false` hoặc `hasAppToken: false` | thiếu biến môi trường | Thêm biến trên Vercel rồi **Redeploy** — biến mới không tự áp dụng cho bản đã deploy |
 | `db: "loi"` kèm `dbError` nhắc timeout | Atlas chặn IP | Network Access thêm `0.0.0.0/0` |
 | `db: "loi"` kèm `dbError` nhắc authentication | sai user/mật khẩu | Kiểm tra lại chuỗi kết nối, mật khẩu có ký tự đặc biệt phải mã hoá URL |
-| `db: "ket-noi-duoc"` mà app vẫn lỗi | mã truy cập sai | Xoá dữ liệu trang trong trình duyệt rồi nhập lại mã đúng bằng `APP_TOKEN` |
+| `db: "ket-noi-duoc"` mà app vẫn lỗi | mã truy cập sai | Xoá dữ liệu trang trong trình duyệt rồi nhập lại mã đúng |
+| Đăng nhập bằng `ADMIN_TOKEN` mà không thấy nút `⇄` | chưa khai biến `ADMIN_TOKEN` trên Vercel | Thêm biến rồi Redeploy |
 
 Xem log chi tiết ở Vercel: tab **Deployments → Runtime Logs**.
 
 ## Vài điều nên biết
 
-**Về mã truy cập.** Mã này giống mật khẩu chung của cả nhóm chứ không phải tài
-khoản riêng từng người. Ai có link và mã đều sửa được mọi thứ, và app không phân
-biệt được ai là ai ngoài việc mỗi người tự chọn tên mình ở tab Lịch sử. Với một
-quỹ đi chơi thì đủ dùng; đừng đưa dữ liệu nhạy cảm hơn vào đây. Muốn đổi mã, sửa
-`APP_TOKEN` trên Vercel rồi redeploy, mọi người sẽ được hỏi mã mới.
-
-**Về nhiều chuyến đi.** Một database dùng chung cho nhiều chuyến được, mỗi chuyến
-một `tripId` khác nhau. Sửa `tripId` trong khối cấu hình ở đầu `index.html` rồi
-deploy lại, hoặc tạo hai project Vercel trỏ về cùng database.
+**Về mã truy cập.** Hai mã này là mật khẩu chung theo vai trò chứ không phải tài
+khoản riêng từng người. Ai có `APP_TOKEN` đều sửa được mọi số liệu, và app không
+phân biệt được ai là ai ngoài việc mỗi người tự chọn tên mình ở tab Lịch sử.
+`ADMIN_TOKEN` chỉ thêm quyền quản lý chuyến, không phải quyền cao hơn về dữ liệu.
+Với một quỹ đi chơi thì đủ dùng; đừng đưa dữ liệu nhạy cảm hơn vào đây. Muốn đổi
+mã, sửa biến trên Vercel rồi redeploy, mọi người sẽ được hỏi mã mới.
 
 **Về giới hạn miễn phí.** Cluster M0 của Atlas cho 512MB, thừa sức cho vài trăm
 chuyến. Bản Hobby của Vercel giới hạn số lần gọi function; app hiện đồng bộ 6 giây

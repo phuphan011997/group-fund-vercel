@@ -1,0 +1,12 @@
+{
+  "name": "group-fund",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Webapp theo dõi quỹ và chia tiền cho nhóm du lịch",
+  "dependencies": {
+    "mongodb": "^6.10.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

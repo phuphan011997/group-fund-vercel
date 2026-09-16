@@ -62,6 +62,21 @@ sau vài giây.
 
 Nếu ai đó nhập sai mã, app báo ngay và không đọc được gì.
 
+## Khi app báo mất kết nối
+
+Mở `https://<ten-mien-cua-ban>/api/health` trên trình duyệt. Endpoint này không cần
+mã truy cập và cho biết hỏng ở khâu nào:
+
+| Kết quả | Nghĩa là | Cách sửa |
+|---|---|---|
+| Trang 404 của Vercel | function không được nhận diện | Kiểm tra file có đúng tên `api/[...path].js` với dấu ngoặc vuông và ba chấm, nằm trong thư mục `api/` ở gốc repo |
+| `hasMongoUri: false` hoặc `hasAppToken: false` | thiếu biến môi trường | Thêm biến trên Vercel rồi **Redeploy** — biến mới không tự áp dụng cho bản đã deploy |
+| `db: "loi"` kèm `dbError` nhắc timeout | Atlas chặn IP | Network Access thêm `0.0.0.0/0` |
+| `db: "loi"` kèm `dbError` nhắc authentication | sai user/mật khẩu | Kiểm tra lại chuỗi kết nối, mật khẩu có ký tự đặc biệt phải mã hoá URL |
+| `db: "ket-noi-duoc"` mà app vẫn lỗi | mã truy cập sai | Xoá dữ liệu trang trong trình duyệt rồi nhập lại mã đúng bằng `APP_TOKEN` |
+
+Xem log chi tiết ở Vercel: tab **Deployments → Runtime Logs**.
+
 ## Vài điều nên biết
 
 **Về mã truy cập.** Mã này giống mật khẩu chung của cả nhóm chứ không phải tài

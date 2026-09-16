@@ -1176,7 +1176,11 @@ nav button.on{color:var(--sea-ink);}
         showBanner('Mã truy cập không đúng. Tải lại trang để nhập lại.');
         return;
       }
-      setSync('Mất kết nối máy chủ');
+      var st = err && err.status;
+      setSync('Mất kết nối');
+      showBanner(st
+        ? 'Máy chủ trả về lỗi ' + st + '. Mở /api/health trên cùng tên miền để xem hỏng ở khâu nào.'
+        : 'Không gọi được API. Kiểm tra app và API có cùng tên miền không, rồi mở /api/health.');
     });
   }
 

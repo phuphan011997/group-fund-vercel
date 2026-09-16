@@ -54,6 +54,29 @@ module.exports = async function handler(req, res) {
   // res.setHeader("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS");
   if (req.method === "OPTIONS") return res.status(204).end();
 
+  // /api/health — kiểm tra nhanh, không cần token.
+  // Mở thẳng trên trình duyệt để biết hỏng ở khâu nào.
+  const rawPath = [].concat(req.query.path || []);
+  if (rawPath[0] === "health") {
+    const out = {
+      route: "ok",
+      hasMongoUri: !!process.env.MONGODB_URI,
+      hasAppToken: !!process.env.APP_TOKEN,
+      db: "chua-thu"
+    };
+    if (out.hasMongoUri) {
+      try {
+        const d = await getDb();
+        await d.command({ ping: 1 });
+        out.db = "ket-noi-duoc";
+      } catch (e) {
+        out.db = "loi";
+        out.dbError = String(e && e.message || e).slice(0, 200);
+      }
+    }
+    return res.status(200).json(out);
+  }
+
   const token = process.env.APP_TOKEN;
   if (!token) return res.status(500).json({ error: "server_misconfigured" });
   if ((req.headers.authorization || "") !== "Bearer " + token) {
@@ -61,7 +84,7 @@ module.exports = async function handler(req, res) {
   }
 
   // /api/trips/:tripId/... → ["trips", tripId, ...]
-  const parts = [].concat(req.query.path || []);
+  const parts = rawPath;
   if (parts[0] !== "trips" || !parts[1]) {
     return res.status(404).json({ error: "not_found" });
   }

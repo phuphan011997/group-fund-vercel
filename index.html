@@ -160,6 +160,11 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--sea);outline-off
   font-variant-numeric:tabular-nums;padding-top:1px;
 }
 .when.none{color:var(--ink-soft);font-weight:400;}
+.seg{display:flex;gap:4px;padding:4px;margin-bottom:12px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);}
+.seg button{flex:1;font-family:inherit;font-size:14px;font-weight:600;padding:8px;border:none;border-radius:8px;background:none;color:var(--ink-soft);cursor:pointer;}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--sea-ink);box-shadow:var(--shadow);}
+#qPlan{font-size:16px;line-height:1.55;min-height:220px;}
+[hidden]{display:none!important;}
 .note-body{font-size:13px;color:var(--ink-soft);margin-top:3px;white-space:pre-wrap;word-break:break-word;}
 
 .pcard{border-bottom:1px solid var(--line);padding:14px 16px;}
@@ -295,16 +300,19 @@ nav button.on{color:var(--sea-ink);}
 
   <section class="panel" id="p-plan">
     <div class="card">
-      <div class="card-h">Nhập nhanh lịch trình</div>
+      <div class="card-h">Nhập lịch trình</div>
       <div class="card-b">
-        <textarea id="qPlan" rows="7" placeholder="- 17/12&#10;- [ ] 22h bắt taxi về homestay&#10;- 18/12&#10;- [ ] 7h30 ăn sáng phở&#10;- [ ] 12h ăn trưa"></textarea>
-        <div class="hint" id="qPlanHint">Mỗi dòng một mục. Dòng ngày dạng 17/12, dòng hoạt động bắt đầu bằng giờ như 7h30, 22h hoặc 7:30.</div>
-        <button class="btn mt" id="qPlanAdd" disabled>Thêm vào lịch trình</button>
+        <div class="seg" role="tablist">
+          <button type="button" data-pm="note" aria-pressed="true">Theo note</button>
+          <button type="button" data-pm="item" aria-pressed="false">Từng mục</button>
+        </div>
+      <div id="pmNote">
+        <textarea id="qPlan" rows="12" spellcheck="false" placeholder="- 17/12&#10;- [ ] 22h bắt taxi về homestay&#10;- 18/12&#10;- [ ] 7h30 ăn sáng phở&#10;- [ ] 12h ăn trưa"></textarea>
+        <div class="hint" id="qPlanHint"></div>
+        <button class="btn mt" id="qPlanSave" disabled>Lưu lịch trình</button>
+        <button class="btn ghost mt" id="qPlanReset" hidden>Bỏ thay đổi</button>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-h">Thêm mục lịch trình</div>
-      <div class="card-b">
+      <div id="pmItem" hidden>
         <label class="f" for="pTitle">Hoạt động</label>
         <input type="text" id="pTitle" placeholder="Khởi hành, nhận phòng, ăn trưa…" autocomplete="off">
         <div class="row2 mt">
@@ -322,6 +330,7 @@ nav button.on{color:var(--sea-ink);}
           <textarea id="pNote" placeholder="Địa chỉ, số điện thoại, mang theo gì…"></textarea>
         </div>
         <button class="btn mt" id="addPlan">Thêm vào lịch trình</button>
+      </div>
       </div>
     </div>
     <div class="card">
@@ -676,7 +685,7 @@ nav button.on{color:var(--sea-ink);}
     $('bFund').textContent = fmt(t.fund);
     $('bSpent').textContent = fmt(t.spent);
     renderMembers(); renderPayer(); renderWho(); renderExpenses();
-    renderPlans(); renderStats(t); renderMeSelect(); renderLogs();
+    renderPlans(); syncNoteBox(); renderStats(t); renderMeSelect(); renderLogs();
   }
 
   function renderMembers(){
@@ -1079,7 +1088,9 @@ nav button.on{color:var(--sea-ink);}
     render(); $('pTitle').focus();
   });
 
-  // Nhập nhanh: "- 17/12" là dòng ngày, "- [ ] 7h30 ăn sáng" là một mục.
+  // ---- Nhập theo note ----
+  // "- 17/12" là dòng ngày, "- [ ] 7h30 ăn sáng" là một mục,
+  // dòng thụt đầu dòng ngay dưới một mục là ghi chú của mục đó.
   // Ngày không ghi năm thì lấy năm nay, trừ khi ngày đó đã qua hơn 6 tháng thì lấy năm sau.
   function pad2(n){ return (n<10?'0':'')+n; }
   function inferYear(d, mo){
@@ -1088,9 +1099,16 @@ nav button.on{color:var(--sea-ink);}
     return y;
   }
   function parseQuickPlan(text){
-    var out = [], curDate = '';
+    var out = [], curDate = '', last = null;
     String(text||'').split(/\r?\n/).forEach(function(line){
+      if(!line.trim()){ last = null; return; }
+      var indented = /^(\s{2,}|\t)/.test(line);
+      if(indented && last && !/^\s*([-*+•]|\[)/.test(line)){
+        last.note = last.note ? last.note + '\n' + line.trim() : line.trim();
+        return;
+      }
       var s = line.replace(/^\s*(?:[-*+•]\s*)?(?:\[[ xX]?\]\s*)?/, '').trim();
+      last = null;
       if(!s) return;
       var dm = s.match(/^(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](\d{2}|\d{4}))?(?=\s|$|[:,])[:,]?\s*/);
       if(dm){
@@ -1110,57 +1128,134 @@ nav button.on{color:var(--sea-ink);}
         s = s.slice(tm[0].length).replace(/^[-–:,]\s*/, '').trim();
       }
       if(!s) return;
-      out.push({ date:curDate, time:time, title:s });
+      last = { date:curDate, time:time, title:s, note:'' };
+      out.push(last);
     });
     return out;
   }
-  function planKey(p){ return (p.date||'')+'|'+(p.time||'')+'|'+String(p.title||'').toLowerCase(); }
-  function quickPlanItems(){
-    var seen = {};
-    plans.forEach(function(p){ seen[planKey(p)] = true; });
-    var fresh = [], dup = 0;
-    parseQuickPlan($('qPlan').value).forEach(function(p){
-      var k = planKey(p);
-      if(seen[k]){ dup++; return; }
-      seen[k] = true; fresh.push(p);
+  function sortedPlans(){
+    return plans.slice().sort(function(a,b){
+      var k1=(a.date||'0000-00-00')+(a.time||'99:99'), k2=(b.date||'0000-00-00')+(b.time||'99:99');
+      return k1<k2 ? -1 : (k1>k2 ? 1 : (a.createdAt||0)-(b.createdAt||0));
     });
-    return { fresh:fresh, dup:dup };
   }
-  function updateQuickHint(){
-    var r = quickPlanItems(), h = $('qPlanHint'), btn = $('qPlanAdd');
-    if(!$('qPlan').value.trim()){
-      h.textContent = 'Mỗi dòng một mục. Dòng ngày dạng 17/12, dòng hoạt động bắt đầu bằng giờ như 7h30, 22h hoặc 7:30.';
-      btn.disabled = true; btn.textContent = 'Thêm vào lịch trình'; return;
+  // Chiều ngược lại: dựng note từ lịch trình đang lưu, mục chưa có ngày đứng đầu.
+  function plansToNote(){
+    var lines = [], day = null;
+    sortedPlans().forEach(function(p){
+      var d = p.date || '';
+      if(d !== day){
+        day = d;
+        if(d){
+          var y = Number(d.slice(0,4)), mo = Number(d.slice(5,7)), dd = Number(d.slice(8,10));
+          if(lines.length) lines.push('');
+          lines.push('- ' + pad2(dd) + '/' + pad2(mo) + (inferYear(dd, mo)===y ? '' : '/' + y));
+        }
+      }
+      var t = '';
+      if(p.time){
+        var hh = Number(p.time.slice(0,2)), mm = p.time.slice(3,5);
+        t = hh + 'h' + (mm==='00' ? '' : mm) + ' ';
+      }
+      lines.push('- [ ] ' + t + p.title);
+      if(p.note) String(p.note).split(/\r?\n/).forEach(function(n){ if(n.trim()) lines.push('    ' + n.trim()); });
+    });
+    return lines.join('\n');
+  }
+
+  // baseText là note dựng từ dữ liệu lúc nạp vào ô, baseIds là các mục có mặt lúc đó.
+  // Khi lưu chỉ xoá mục thuộc baseIds, để mục người khác vừa thêm trong lúc mình đang sửa không bị mất.
+  var planMode = 'note', baseText = '', baseIds = {};
+  try{ planMode = localStorage.getItem('groupFund.planMode') === 'item' ? 'item' : 'note'; }catch(e){}
+  function noteDirty(){ return $('qPlan').value !== baseText; }
+  function loadNoteBox(){
+    baseText = plansToNote();
+    baseIds = {};
+    plans.forEach(function(p){ baseIds[p.id] = true; });
+    // chỉ gán khi khác, để lần đồng bộ 6 giây không làm nhảy con trỏ
+    if($('qPlan').value !== baseText) $('qPlan').value = baseText;
+    updateNoteHint();
+  }
+  function syncNoteBox(){
+    if(planMode !== 'note') return;
+    if(!noteDirty()) loadNoteBox();
+    else updateNoteHint();
+  }
+  function setPlanMode(m){
+    planMode = m;
+    try{ localStorage.setItem('groupFund.planMode', m); }catch(e){}
+    document.querySelectorAll('[data-pm]').forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.pm===m)); });
+    $('pmNote').hidden = m !== 'note';
+    $('pmItem').hidden = m !== 'item';
+    syncNoteBox();
+  }
+  document.querySelectorAll('[data-pm]').forEach(function(b){
+    b.addEventListener('click', function(){ setPlanMode(b.dataset.pm); });
+  });
+
+  function planKey(p){ return (p.date||'')+'|'+(p.time||'')+'|'+String(p.title||'').trim().toLowerCase(); }
+  function diffNote(){
+    var pool = {};
+    sortedPlans().forEach(function(p){ var k = planKey(p); (pool[k] = pool[k] || []).push(p); });
+    var add = [], edit = [], used = {};
+    parseQuickPlan($('qPlan').value).forEach(function(it){
+      var cand = pool[planKey(it)];
+      var p = cand && cand.shift();
+      if(!p){ add.push(it); return; }
+      used[p.id] = true;
+      if(p.title !== it.title || (p.note||'') !== it.note) edit.push({ plan:p, title:it.title, note:it.note });
+    });
+    var del = plans.filter(function(p){ return !used[p.id] && baseIds[p.id]; });
+    return { add:add, edit:edit, del:del };
+  }
+  function diffText(r){
+    var parts = [];
+    if(r.add.length) parts.push('thêm ' + r.add.length);
+    if(r.edit.length) parts.push('sửa ' + r.edit.length);
+    if(r.del.length) parts.push('xoá ' + r.del.length);
+    return parts.join(', ');
+  }
+  function updateNoteHint(){
+    var h = $('qPlanHint'), btn = $('qPlanSave'), dirty = noteDirty();
+    $('qPlanReset').hidden = !dirty;
+    if(!dirty){
+      btn.disabled = true;
+      h.textContent = plans.length
+        ? 'Đang hiển thị ' + plans.length + ' mục đã lưu. Sửa trực tiếp rồi bấm Lưu. Dòng thụt vào dưới một mục là ghi chú của mục đó.'
+        : 'Mỗi dòng một mục. Dòng ngày dạng 17/12, dòng hoạt động bắt đầu bằng giờ như 7h30, 22h hoặc 7:30.';
+      return;
     }
-    var byDay = {}, order = [];
-    r.fresh.forEach(function(p){
-      var k = p.date || '';
-      if(!(k in byDay)){ byDay[k] = 0; order.push(k); }
-      byDay[k]++;
-    });
-    var parts = order.map(function(k){
-      return (k ? k.slice(8,10)+'/'+k.slice(5,7) : 'chưa có ngày') + ' (' + byDay[k] + ')';
-    });
-    h.textContent = r.fresh.length
-      ? 'Nhận được ' + r.fresh.length + ' mục: ' + parts.join(', ') + (r.dup ? ' · bỏ qua ' + r.dup + ' mục đã có' : '')
-      : (r.dup ? 'Tất cả ' + r.dup + ' mục đã có trong lịch trình.' : 'Chưa nhận ra mục nào.');
-    btn.disabled = !r.fresh.length;
-    btn.textContent = r.fresh.length ? 'Thêm ' + r.fresh.length + ' mục' : 'Thêm vào lịch trình';
+    var t = diffText(diffNote());
+    h.textContent = t ? 'Khi lưu sẽ ' + t + ' mục.' : 'Không có thay đổi nào về lịch trình.';
+    btn.disabled = !t;
   }
-  $('qPlan').addEventListener('input', updateQuickHint);
-  $('qPlanAdd').addEventListener('click', function(){
-    var items = quickPlanItems().fresh;
-    if(!items.length) return;
-    var base = Date.now();
-    items.forEach(function(it, i){
-      // createdAt tăng dần để các mục không có giờ giữ đúng thứ tự đã gõ
-      var p = { id:newId(), title:it.title, date:it.date, time:it.time, note:'', createdAt:base+i };
-      plans.push(p); put('plans', p);
+  $('qPlan').addEventListener('input', updateNoteHint);
+  $('qPlanReset').addEventListener('click', loadNoteBox);
+  $('qPlanSave').addEventListener('click', function(){
+    var r = diffNote();
+    if(!diffText(r)) return;
+    var go = r.del.length
+      ? askConfirm({title:'Xoá ' + r.del.length + ' mục lịch trình?',
+          message:'Các mục không còn trong note sẽ bị xoá: ' +
+            r.del.slice(0,5).map(function(p){ return '<b>'+esc(p.title)+'</b>'; }).join(', ') +
+            (r.del.length>5 ? '… và ' + (r.del.length-5) + ' mục khác' : '') + '.',
+          ok:'Lưu và xoá', danger:true})
+      : Promise.resolve(true);
+    go.then(function(ok){
+      if(!ok) return;
+      var base = Date.now(), delIds = {};
+      r.add.forEach(function(it, i){
+        // createdAt tăng dần để các mục không có giờ giữ đúng thứ tự đã gõ
+        var p = { id:newId(), title:it.title, date:it.date, time:it.time, note:it.note, createdAt:base+i };
+        plans.push(p); put('plans', p);
+      });
+      r.edit.forEach(function(x){ x.plan.title = x.title; x.plan.note = x.note; put('plans', x.plan); });
+      r.del.forEach(function(p){ delIds[p.id] = true; drop('plans', p.id); });
+      plans = plans.filter(function(p){ return !delIds[p.id]; });
+      logAct('cập nhật lịch trình theo note: ' + diffText(r) + ' mục', r.del.length ? 'del' : '');
+      loadNoteBox();
+      render();
     });
-    logAct('nhập nhanh ' + items.length + ' mục lịch trình');
-    $('qPlan').value = '';
-    updateQuickHint();
-    render();
   });
 
   $('planList').addEventListener('click', function(ev){
@@ -1308,6 +1403,7 @@ nav button.on{color:var(--sea-ink);}
   loadLocal();
   if(!$('pDate').value) $('pDate').value = new Date().toISOString().slice(0,10);
   render();
+  setPlanMode(planMode);
   setSync('Đang kết nối…');
 
   function subClaude(){

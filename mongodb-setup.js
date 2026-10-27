@@ -111,14 +111,32 @@ ensure("logs", {
   }
 });
 
-// ---------- settings: chuyến đang mở cho cả nhóm ----------
-ensure("settings", {
+// ---------- users: tài khoản đăng nhập ----------
+ensure("users", {
   bsonType: "object",
-  required: ["_id"],
+  required: ["_id", "role"],
   properties: {
-    _id:          { bsonType: "string", description: "luôn là 'app'" },
-    activeTripId: { bsonType: ["string", "null"], description: "chuyến admin đang mở cho cả nhóm" },
-    updatedAt:    { bsonType: ["date", "long", "double", "int"] }
+    _id:           { bsonType: "string", description: "username, luôn viết thường" },
+    name:          { bsonType: "string", description: "tên hiển thị" },
+    role:          { enum: ["admin", "member"] },
+    salt:          { bsonType: "string" },
+    passwordHash:  { bsonType: "string", description: "scrypt, không bao giờ lưu mật khẩu gốc" },
+    tripIds:       { bsonType: "array", items: { bsonType: "string" },
+                     description: "các chuyến tài khoản này được vào" },
+    currentTripId: { bsonType: ["string", "null"], description: "chuyến người này đang mở" },
+    createdAt:     { bsonType: ["date", "long", "double", "int"] }
+  }
+});
+
+// ---------- sessions: phiên đăng nhập, tự hết hạn sau 30 ngày ----------
+ensure("sessions", {
+  bsonType: "object",
+  required: ["_id", "username", "expiresAt"],
+  properties: {
+    _id:       { bsonType: "string", description: "session token ngẫu nhiên" },
+    username:  { bsonType: "string" },
+    createdAt: { bsonType: "date" },
+    expiresAt: { bsonType: "date" }
   }
 });
 
@@ -127,6 +145,10 @@ d.members.createIndex({ tripId: 1, createdAt: 1 });
 d.expenses.createIndex({ tripId: 1, createdAt: -1 });
 d.plans.createIndex({ tripId: 1, date: 1, time: 1 });
 d.logs.createIndex({ tripId: 1, at: -1 });
+d.users.createIndex({ role: 1 });
+d.sessions.createIndex({ username: 1 });
+// Mongo tự xoá phiên quá hạn, nên không có phiên nào sống quá 30 ngày.
+d.sessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "sessions_ttl" });
 print("• đã tạo index");
 
 // Tự xoá log cũ hơn 180 ngày để không phình database.
@@ -139,15 +161,10 @@ try {
   print("• bỏ qua TTL logs: " + e.message);
 }
 
-// ---------- dữ liệu mẫu cho một chuyến ----------
-const TRIP_ID = "trip-1";
-if (!d.trips.findOne({ _id: TRIP_ID })) {
-  d.trips.insertOne({ _id: TRIP_ID, name: "Quỹ nhóm", holderId: null, note: "", updatedAt: new Date() });
-  print("• đã tạo chuyến mẫu: " + TRIP_ID);
-}
-if (!d.settings.findOne({ _id: "app" })) {
-  d.settings.insertOne({ _id: "app", activeTripId: TRIP_ID, updatedAt: new Date() });
-  print("• đặt chuyến đang mở: " + TRIP_ID);
-}
+// Không tạo chuyến mẫu: chuyến đi do admin tạo ngay trong app, và chuyến
+// tạo ở đây sẽ không được gán cho ai nên chỉ nằm lay lắt trong database.
 
 print("\nXong. Database: " + DB_NAME);
+print("Tài khoản admin đầu tiên được tạo ngay trong app:");
+print("  mở trang web, bật 'Tôi là quản trị viên', nhập username/mật khẩu bạn muốn");
+print("  cùng ADMIN_SECRET đã khai trên Vercel.");

@@ -10,12 +10,10 @@
 <script>
 /* ===== CẤU HÌNH =====
    baseUrl "/api" nghĩa là API chạy cùng tên miền với trang này (Vercel).
-   token để trống: app sẽ hỏi mã truy cập ở lần mở đầu tiên và nhớ trên máy.
-   tripId: đổi nếu bạn muốn dùng chung database cho nhiều chuyến đi. */
+   Tài khoản, mật khẩu và việc gán chuyến đều quản lý trong app,
+   không còn gì phải khai ở đây. */
 window.GROUP_FUND_API = {
-  baseUrl: "/api",
-  tripId:  "trip-1",
-  token:   ""
+  baseUrl: "/api"
 };
 </script>
 <style>
@@ -75,6 +73,39 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 0 8px;
 .trip-row:last-child{border-bottom:none;}
 .trip-row .nm{flex:1;min-width:0;font-weight:600;}
 .trip-row .now{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sea-tint);color:var(--sea-ink);}
+.trip-row .who{font-size:11px;color:var(--ink-soft);}
+
+/* ---- màn đăng nhập ---- */
+.login{
+  position:fixed;inset:0;z-index:60;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;
+}
+.login[hidden]{display:none;}
+.login-box{width:100%;max-width:360px;}
+.login-box h1{font-size:24px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em;}
+.login-box .sub{font-size:13px;color:var(--ink-soft);margin:0 0 18px;}
+.login-box .sub.mt{margin:12px 0 0;text-align:center;}
+.login-box .mt{margin-top:11px;}
+.login-err{
+  background:var(--rose-tint);color:var(--rose);border-radius:10px;
+  padding:10px 13px;font-size:13px;margin-top:11px;
+}
+.login-err[hidden]{display:none;}
+.link{
+  border:none;background:none;padding:0;cursor:pointer;font-family:inherit;
+  font-size:13px;font-weight:600;color:var(--sea-ink);
+}
+#liAdminWrap[hidden]{display:none;}
+.app[hidden]{display:none;}
+.me-row{
+  display:flex;align-items:center;gap:10px;padding:11px 14px;
+  border-bottom:1px solid var(--line);font-size:14px;
+}
+.me-row:last-child{border-bottom:none;}
+.me-row .nm{flex:1;min-width:0;font-weight:600;}
+.me-row .rl{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-soft);}
+.me-row .rl.admin{background:var(--sun);color:#fff;}
+.pick{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px;}
 
 .balance{margin-top:9px;background:var(--surface);border-radius:13px;border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden;}
 .brow{display:flex;align-items:center;gap:12px;padding:10px 14px;}
@@ -215,11 +246,33 @@ nav button.on{color:var(--sea-ink);}
 </head>
 <body>
 
-<div class="app">
+<div class="login" id="login" hidden>
+  <form class="login-box" id="loginForm" autocomplete="on">
+    <h1>Quỹ nhóm</h1>
+    <p class="sub" id="loginSub">Đăng nhập để vào chuyến đi của bạn.</p>
+    <label class="f" for="liUser">Tên đăng nhập</label>
+    <input type="text" id="liUser" autocomplete="username" autocapitalize="none" spellcheck="false">
+    <label class="f mt" for="liPass">Mật khẩu</label>
+    <input type="password" id="liPass" autocomplete="current-password">
+    <div class="mt">
+      <button class="link" id="liToggleAdmin" type="button">Tôi là quản trị viên</button>
+    </div>
+    <div id="liAdminWrap" hidden>
+      <label class="f" for="liSecret">Mã quản trị</label>
+      <input type="password" id="liSecret" autocomplete="off">
+    </div>
+    <div class="login-err" id="liErr" hidden></div>
+    <button class="btn mt" id="liGo" type="submit">Đăng nhập</button>
+    <p class="sub mt">Máy này sẽ ghi nhớ bạn trong 30 ngày.</p>
+  </form>
+</div>
+
+<div class="app" id="app" hidden>
   <header>
     <div class="title-row">
       <input id="tripName" value="Quỹ nhóm" aria-label="Tên chuyến đi">
       <button class="tripbtn" id="tripBtn" type="button" title="Đổi chuyến" hidden>⇄</button>
+      <button class="tripbtn" id="adminBtn" type="button" title="Quản trị" hidden>⚙</button>
       <span class="sync" id="sync"></span>
     </div>
     <div class="balance">
@@ -298,6 +351,17 @@ nav button.on{color:var(--sea-ink);}
     </div>
   </section>
 
+  <section class="panel" id="p-stats">
+    <div class="card">
+      <div class="card-h">Tính toán cuối chuyến</div>
+      <div id="statsList"></div>
+    </div>
+    <div class="card">
+      <div class="card-h">Ai đã đưa tiền ra</div>
+      <div id="totalsList"></div>
+    </div>
+  </section>
+
   <section class="panel" id="p-plan">
     <div class="card">
       <div class="card-h">Nhập lịch trình</div>
@@ -346,17 +410,6 @@ nav button.on{color:var(--sea-ink);}
     </div>
   </section>
 
-  <section class="panel" id="p-stats">
-    <div class="card">
-      <div class="card-h">Tính toán cuối chuyến</div>
-      <div id="statsList"></div>
-    </div>
-    <div class="card">
-      <div class="card-h">Ai đã đưa tiền ra</div>
-      <div id="totalsList"></div>
-    </div>
-  </section>
-
   <section class="panel" id="p-log">
     <div class="card">
       <div class="card-b">
@@ -375,8 +428,8 @@ nav button.on{color:var(--sea-ink);}
 <nav>
   <button class="on" data-p="people"><span class="ic">👥</span>Thành viên</button>
   <button data-p="spend"><span class="ic">🧾</span>Chi tiêu</button>
-  <button data-p="plan"><span class="ic">🗓</span>Lịch trình</button>
   <button data-p="stats"><span class="ic">📊</span>Thống kê</button>
+  <button data-p="plan"><span class="ic">🗓</span>Lịch trình</button>
   <button data-p="log"><span class="ic">🕘</span>Lịch sử</button>
 </nav>
 
@@ -388,8 +441,11 @@ nav button.on{color:var(--sea-ink);}
 
   var db = null;
   var API = window.GROUP_FUND_API || null;
-  var TRIP = (API && API.tripId) || 'trip-1';   // chuyến đang mở
-  var ROLE = null;                              // 'admin' | 'member'
+  var TRIP = null;        // chuyến đang mở
+  var TOKEN = null;       // session token, hạn 30 ngày
+  var ME = null;          // {username, name, role, tripIds, currentTripId}
+  var MY_TRIPS = [];      // các chuyến tài khoản này vào được
+  var pollTimer = null;
   var mode = 'local';           // local | claude | api
   var members = [], expenses = [], plans = [], logs = [];
   var meta = { name:"Quỹ nhóm", holderId:null, note:"" };
@@ -570,7 +626,6 @@ nav button.on{color:var(--sea-ink);}
     if(coll==='logs') return {at:o.at, who:o.who||'', text:o.text||'', kind:o.kind||''};
     return {};
   }
-  var TOKEN = null;
   function apiCall(method, path, body){
     return apiFetch(method, 'trips/' + encodeURIComponent(TRIP) + '/' + path, body);
   }
@@ -583,31 +638,26 @@ nav button.on{color:var(--sea-ink);}
       if(!r.ok){
         var err = new Error('HTTP ' + r.status);
         err.status = r.status;
-        throw err;
+        return r.json().catch(function(){ return null; }).then(function(b){
+          err.body = b;
+          throw err;
+        });
       }
       return r.status === 204 ? null : r.json();
     });
   }
-  function forgetToken(){
-    TOKEN = null;
-    try{ localStorage.removeItem('groupFund.token'); }catch(e){}
+  function saveSession(tok){
+    TOKEN = tok;
+    try{
+      if(tok) localStorage.setItem('groupFund.session', tok);
+      else localStorage.removeItem('groupFund.session');
+    }catch(e){}
   }
-  function ensureToken(){
-    if(API.token){ TOKEN = API.token; return Promise.resolve(true); }
-    if(TOKEN) return Promise.resolve(true);
-    try{ TOKEN = localStorage.getItem('groupFund.token') || localStorage.getItem('quy-token') || null; }catch(e){}
-    if(TOKEN) return Promise.resolve(true);
-    return askText({
-      title:'Mã truy cập',
-      message:'Nhập mã do người tạo chuyến cung cấp. Máy này sẽ nhớ, lần sau không hỏi lại.',
-      label:'Mã truy cập', ok:'Vào chuyến'
-    }).then(function(v){
-      if(!v) return false;
-      TOKEN = v;
-      try{ localStorage.setItem('groupFund.token', v); }catch(e){}
-      return true;
-    });
+  function loadSession(){
+    try{ TOKEN = localStorage.getItem('groupFund.session') || null; }catch(e){ TOKEN = null; }
+    return TOKEN;
   }
+  function forgetToken(){ saveSession(null); }
   function onErr(err){
     var c = err && err.code;
     if(c==='quota_exceeded') showBanner('Kho dữ liệu đã đầy, hãy xoá bớt khoản chi cũ.');
@@ -1340,63 +1390,266 @@ nav button.on{color:var(--sea-ink);}
     });
   });
 
-  // ================= QUẢN LÝ CHUYẾN (chỉ admin) =================
+  // ================= TÀI KHOẢN, CHUYẾN, QUẢN TRỊ =================
   function slugify(s){
-    return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'')
       .replace(/đ/g,'d').replace(/Đ/g,'D').toLowerCase()
       .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'trip';
   }
+
+  // ---- đăng nhập ----
+  function showLogin(msg){
+    $('app').hidden = true;
+    $('login').hidden = false;
+    var err = $('liErr');
+    if(msg){ err.textContent = msg; err.hidden = false; } else { err.hidden = true; }
+    setTimeout(function(){ $('liUser').focus(); }, 60);
+  }
+  $('liToggleAdmin').addEventListener('click', function(){
+    var w = $('liAdminWrap');
+    w.hidden = !w.hidden;
+    this.textContent = w.hidden ? 'Tôi là quản trị viên' : 'Tôi không phải quản trị viên';
+    if(!w.hidden) $('liSecret').focus();
+  });
+  $('loginForm').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var u = $('liUser').value.trim();
+    var p = $('liPass').value;
+    var sec = $('liAdminWrap').hidden ? '' : $('liSecret').value;
+    if(!u || !p){ $('liErr').textContent = 'Nhập tên đăng nhập và mật khẩu.'; $('liErr').hidden = false; return; }
+    var btn = $('liGo');
+    btn.disabled = true; btn.textContent = 'Đang kiểm tra…';
+    apiFetch('POST','auth/login', {username:u, password:p, adminSecret:sec})
+      .then(function(d){
+        saveSession(d.token);
+        ME = d.user; MY_TRIPS = d.trips || [];
+        TRIP = d.user.currentTripId || (MY_TRIPS[0] && MY_TRIPS[0].id) || null;
+        $('liPass').value = ''; $('liSecret').value = '';
+        enterApp();
+      })
+      .catch(function(err){
+        var map = {
+          401: 'Sai tên đăng nhập hoặc mật khẩu.',
+          400: 'Nhập đủ tên đăng nhập và mật khẩu.'
+        };
+        var msg = map[err && err.status] || 'Không kết nối được máy chủ.';
+        if(err && err.body && err.body.error === 'admin_secret_required'){
+          msg = 'Tài khoản này là quản trị viên, cần nhập thêm mã quản trị.';
+          $('liAdminWrap').hidden = false;
+          $('liToggleAdmin').textContent = 'Tôi không phải quản trị viên';
+        }
+        $('liErr').textContent = msg; $('liErr').hidden = false;
+      })
+      .then(function(){ btn.disabled = false; btn.textContent = 'Đăng nhập'; });
+  });
+
+  function doLogout(){
+    apiFetch('POST','auth/logout').catch(function(){}).then(function(){
+      forgetToken();
+      ME = null; MY_TRIPS = []; TRIP = null;
+      members=[]; expenses=[]; plans=[]; logs=[];
+      if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+      showLogin('');
+    });
+  }
+
+  function enterApp(){
+    $('login').hidden = true;
+    $('app').hidden = false;
+    $('tripBtn').hidden = !(MY_TRIPS.length > 1 || (ME && ME.role === 'admin'));
+    $('adminBtn').hidden = !(ME && ME.role === 'admin');
+    members=[]; expenses=[]; plans=[]; logs=[];
+    render();
+    if(!TRIP){
+      setSync('Chưa có chuyến');
+      showBanner(ME && ME.role === 'admin'
+        ? 'Bạn chưa có chuyến nào. Bấm ⚙ để tạo chuyến đầu tiên.'
+        : 'Bạn chưa được gán chuyến nào. Nhờ quản trị viên gán giúp.');
+      return;
+    }
+    showBanner('');
+    setSync('Đang tải…');
+    pullApi();
+    if(pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(pullApi, 6000);
+  }
+
+  // ---- đổi chuyến ----
   function openTripSheet(){
-    apiFetch('GET','trips').then(function(d){
-      var list = (d && d.trips) || [];
-      var active = (d && d.activeTripId) || TRIP;
-      var rows = list.length ? list.map(function(t){
-        return '<div class="trip-row" data-trip="'+esc(t.id)+'">' +
-          '<span class="nm">'+esc(t.name||t.id)+'</span>' +
-          (t.id===active ? '<span class="now">đang mở</span>' : '') + '</div>';
-      }).join('') : '<div class="empty">Chưa có chuyến nào.</div>';
-      var html = '<h3>Chuyến đi</h3>' +
-        '<p class="msg">Chọn một chuyến để mở cho cả nhóm. Mọi người đang dùng link này sẽ chuyển theo trong vài giây.</p>' +
+    var rows = MY_TRIPS.length ? MY_TRIPS.map(function(t){
+      return '<div class="trip-row" data-trip="'+esc(t.id)+'">' +
+        '<span class="nm">'+esc(t.name||t.id)+'</span>' +
+        (t.id===TRIP ? '<span class="now">đang mở</span>' : '') + '</div>';
+    }).join('') : '<div class="empty">Bạn chưa được gán chuyến nào.</div>';
+    var html = '<h3>Chuyến của bạn</h3>' +
+      '<p class="msg">Chọn chuyến muốn mở. Lựa chọn này chỉ áp dụng cho tài khoản của bạn.</p>' +
+      '<div class="sub-list">'+rows+'</div>' +
+      '<div class="me-row"><span class="nm">'+esc(ME ? ME.name : '')+'</span>' +
+        '<span class="rl'+(ME && ME.role==='admin' ? ' admin':'')+'">'+
+        (ME && ME.role==='admin' ? 'Quản trị' : 'Thành viên')+'</span></div>' +
+      '<button class="btn ghost" data-a="logout">Đăng xuất</button>' +
+      '<button class="btn ghost" data-a="">Đóng</button>';
+    openSheet(html, function(root){
+      root.querySelectorAll('[data-trip]').forEach(function(r){
+        r.addEventListener('click', function(){ closeSheet({a:'pick', id:r.dataset.trip}); });
+      });
+      root.querySelectorAll('[data-a]').forEach(function(b){
+        b.addEventListener('click', function(){ closeSheet({a:b.dataset.a}); });
+      });
+    }).then(function(r){
+      if(!r) return;
+      if(r.a==='pick' && r.id!==TRIP) switchTrip(r.id);
+      else if(r.a==='logout') confirmLogout();
+    });
+  }
+  function confirmLogout(){
+    askConfirm({title:'Đăng xuất?', message:'Lần sau bạn sẽ phải nhập lại mật khẩu.',
+                ok:'Đăng xuất', danger:true})
+    .then(function(ok){ if(ok) doLogout(); });
+  }
+  function switchTrip(id){
+    apiFetch('PUT','me/trip', {tripId:id}).then(function(){
+      TRIP = id;
+      if(ME) ME.currentTripId = id;
+      members=[]; expenses=[]; plans=[]; logs=[];
+      setSync('Đang tải…'); showBanner('');
+      return pullApi();
+    }).catch(function(){ showBanner('Không chuyển được chuyến.'); });
+  }
+  $('tripBtn').addEventListener('click', openTripSheet);
+
+  // ---- bảng quản trị ----
+  function refreshMe(){
+    return apiFetch('GET','me').then(function(d){
+      ME = d.user; MY_TRIPS = d.trips || [];
+      $('tripBtn').hidden = !(MY_TRIPS.length > 1 || ME.role === 'admin');
+      return d;
+    });
+  }
+  function openAdminSheet(){
+    var html = '<h3>Quản trị</h3>' +
+      '<p class="msg">Tạo chuyến đi, tạo tài khoản và gán chuyến cho từng người.</p>' +
+      '<button class="btn" data-a="newtrip">Tạo chuyến mới</button>' +
+      '<button class="btn ghost" data-a="users">Quản lý tài khoản</button>' +
+      '<button class="btn ghost" data-a="">Đóng</button>';
+    openSheet(html, function(root){
+      root.querySelectorAll('[data-a]').forEach(function(b){
+        b.addEventListener('click', function(){ closeSheet(b.dataset.a); });
+      });
+    }).then(function(a){
+      if(a==='newtrip') createTrip();
+      else if(a==='users') openUsersSheet();
+    });
+  }
+  function createTrip(){
+    askText({title:'Chuyến mới', message:'Đặt tên cho chuyến đi. Chuyến được tạo sẽ tự gán cho bạn.',
+             label:'Tên chuyến', ok:'Tạo và mở'})
+    .then(function(name){
+      if(!name) return;
+      var id = slugify(name) + '-' + Math.random().toString(36).slice(2,6);
+      return apiFetch('PUT','trips/'+encodeURIComponent(id)+'/meta/trip', {name:name, holderId:null, note:''})
+        .then(refreshMe)
+        .then(function(){ switchTrip(id); });
+    }).catch(function(){ showBanner('Không tạo được chuyến mới.'); });
+  }
+  function openUsersSheet(){
+    Promise.all([apiFetch('GET','users'), apiFetch('GET','trips')]).then(function(res){
+      var list = res[0].users || [];
+      var allTrips = res[1].trips || [];
+      var rows = list.map(function(u){
+        var names = (u.tripIds||[]).map(function(id){
+          var t = allTrips.find(function(x){ return x.id===id; });
+          return t ? (t.name||t.id) : id;
+        }).join(', ');
+        return '<div class="trip-row" data-user="'+esc(u.username)+'">' +
+          '<span class="nm">'+esc(u.name)+'<br><span class="who">'+esc(u.username)+
+            (names ? ' · '+esc(names) : ' · chưa gán chuyến')+'</span></span>' +
+          '<span class="rl'+(u.role==='admin'?' admin':'')+'">'+
+            (u.role==='admin'?'Quản trị':'Thành viên')+'</span></div>';
+      }).join('') || '<div class="empty">Chưa có tài khoản nào.</div>';
+      var html = '<h3>Tài khoản</h3>' +
         '<div class="sub-list">'+rows+'</div>' +
-        '<button class="btn" data-a="new">Tạo chuyến mới</button>' +
+        '<button class="btn" data-a="new">Tạo tài khoản mới</button>' +
         '<button class="btn ghost" data-a="">Đóng</button>';
       openSheet(html, function(root){
-        root.querySelectorAll('[data-trip]').forEach(function(r){
-          r.addEventListener('click', function(){ closeSheet({a:'pick', id:r.dataset.trip}); });
+        root.querySelectorAll('[data-user]').forEach(function(r){
+          r.addEventListener('click', function(){ closeSheet({a:'edit', u:r.dataset.user}); });
         });
         root.querySelectorAll('[data-a]').forEach(function(b){
           b.addEventListener('click', function(){ closeSheet({a:b.dataset.a}); });
         });
       }).then(function(r){
         if(!r) return;
-        if(r.a==='pick' && r.id!==active) switchTrip(r.id);
-        else if(r.a==='new') createTrip();
+        if(r.a==='new') editUser(null, allTrips);
+        else if(r.a==='edit') editUser(list.find(function(x){ return x.username===r.u; }), allTrips);
       });
-    }).catch(function(err){
-      showBanner(err && err.status===403
-        ? 'Mã của bạn không có quyền quản lý chuyến.'
-        : 'Không lấy được danh sách chuyến.');
+    }).catch(function(){ showBanner('Không lấy được danh sách tài khoản.'); });
+  }
+  function editUser(u, allTrips){
+    var isNew = !u;
+    var picked = (u && u.tripIds) ? u.tripIds.slice() : [];
+    var chips = allTrips.length ? allTrips.map(function(t){
+      return '<button class="chip" type="button" data-tid="'+esc(t.id)+'" aria-pressed="'+
+        (picked.indexOf(t.id)!==-1)+'">'+esc(t.name||t.id)+'</button>';
+    }).join('') : '<span class="sub">Chưa có chuyến nào để gán.</span>';
+    var html = '<h3>'+(isNew ? 'Tài khoản mới' : esc(u.name))+'</h3>' +
+      (isNew
+        ? '<label class="f">Tên đăng nhập</label><input type="text" id="euUser" autocapitalize="none" spellcheck="false">'
+        : '<p class="msg">Tên đăng nhập: '+esc(u.username)+'</p>') +
+      '<label class="f mt">Tên hiển thị</label><input type="text" id="euName" value="'+esc(u ? u.name : '')+'">' +
+      '<label class="f mt">Mật khẩu'+(isNew ? '' : ' mới (để trống nếu không đổi)')+'</label>' +
+      '<input type="text" id="euPass" autocomplete="off">' +
+      '<label class="f mt">Vai trò</label>' +
+      '<select id="euRole"><option value="member">Thành viên</option>' +
+      '<option value="admin"'+(u && u.role==='admin' ? ' selected':'')+'>Quản trị</option></select>' +
+      '<label class="f mt">Chuyến được vào</label><div class="pick" id="euTrips">'+chips+'</div>' +
+      '<button class="btn mt" data-a="save">'+(isNew ? 'Tạo tài khoản' : 'Lưu thay đổi')+'</button>' +
+      (isNew || (ME && u.username===ME.username) ? ''
+        : '<button class="btn danger" data-a="del">Xoá tài khoản</button>') +
+      '<button class="btn ghost" data-a="">Đóng</button>';
+    openSheet(html, function(root){
+      root.querySelector('#euTrips').addEventListener('click', function(ev){
+        var b = ev.target.closest('[data-tid]'); if(!b) return;
+        var i = picked.indexOf(b.dataset.tid);
+        if(i===-1) picked.push(b.dataset.tid); else picked.splice(i,1);
+        b.setAttribute('aria-pressed', i===-1);
+      });
+      root.querySelectorAll('[data-a]').forEach(function(b){
+        b.addEventListener('click', function(){
+          if(b.dataset.a==='save'){
+            var un = isNew ? root.querySelector('#euUser').value.trim() : u.username;
+            closeSheet({a:'save', username:un,
+              name: root.querySelector('#euName').value.trim(),
+              password: root.querySelector('#euPass').value,
+              role: root.querySelector('#euRole').value,
+              tripIds: picked.slice()});
+          } else closeSheet({a:b.dataset.a});
+        });
+      });
+    }).then(function(r){
+      if(!r) return;
+      if(r.a==='save'){
+        if(!r.username){ showBanner('Nhập tên đăng nhập.'); return; }
+        if(isNew && !r.password){ showBanner('Tài khoản mới cần có mật khẩu.'); return; }
+        var body = {name: r.name || r.username, role: r.role, tripIds: r.tripIds};
+        if(r.password) body.password = r.password;
+        apiFetch('PUT','users/'+encodeURIComponent(r.username), body)
+          .then(function(){ showBanner(''); refreshMe(); openUsersSheet(); })
+          .catch(function(){ showBanner('Không lưu được tài khoản.'); });
+      } else if(r.a==='del'){
+        askConfirm({title:'Xoá tài khoản '+u.name+'?',
+          message:'Người này sẽ không đăng nhập được nữa. Dữ liệu chuyến đi vẫn giữ nguyên.',
+          ok:'Xoá', danger:true})
+        .then(function(ok){
+          if(!ok) return;
+          apiFetch('DELETE','users/'+encodeURIComponent(u.username))
+            .then(function(){ openUsersSheet(); })
+            .catch(function(){ showBanner('Không xoá được tài khoản.'); });
+        });
+      }
     });
   }
-  function switchTrip(id){
-    apiFetch('PUT','active-trip', {tripId:id}).then(function(){
-      TRIP = id;
-      members=[]; expenses=[]; plans=[]; logs=[];
-      setSync('Đang tải…'); showBanner('');
-      return pullApi();
-    }).catch(function(){ showBanner('Không chuyển được chuyến.'); });
-  }
-  function createTrip(){
-    askText({title:'Chuyến mới', message:'Đặt tên cho chuyến đi. Dữ liệu chuyến cũ vẫn giữ nguyên, chuyển lại bất cứ lúc nào.',
-             label:'Tên chuyến', ok:'Tạo và mở'})
-    .then(function(name){
-      if(!name) return;
-      var id = slugify(name) + '-' + Math.random().toString(36).slice(2,6);
-      return apiFetch('PUT','trips/'+encodeURIComponent(id)+'/meta/trip', {name:name, holderId:null, note:''})
-        .then(function(){ switchTrip(id); });
-    }).catch(function(){ showBanner('Không tạo được chuyến mới.'); });
-  }
-  if(API && API.baseUrl) $('tripBtn').addEventListener('click', openTripSheet);
+  $('adminBtn').addEventListener('click', openAdminSheet);
 
   // ================= BOOT =================
   try{ meId = localStorage.getItem('groupFund.me') || localStorage.getItem('quy-me') || null; }catch(e){}
@@ -1432,13 +1685,18 @@ nav button.on{color:var(--sea-ink);}
       plans = d.plans||[]; logs = d.logs||[];
       setSync('Đã đồng bộ', true); showBanner(''); render();
     }).catch(function(err){
-      if(err && err.status === 401){
+      var st = err && err.status;
+      if(st === 401){
         forgetToken();
-        setSync('Mã không đúng');
-        showBanner('Mã truy cập không đúng. Tải lại trang để nhập lại.');
+        if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+        showLogin('Phiên đăng nhập đã hết hạn. Mời bạn đăng nhập lại.');
         return;
       }
-      var st = err && err.status;
+      if(st === 403){
+        setSync('Không có quyền');
+        showBanner('Bạn không còn quyền vào chuyến này. Nhờ quản trị viên gán lại.');
+        return;
+      }
       setSync('Mất kết nối');
       showBanner(st
         ? 'Máy chủ trả về lỗi ' + st + '. Mở /api/health trên cùng tên miền để xem hỏng ở khâu nào.'
@@ -1448,24 +1706,24 @@ nav button.on{color:var(--sea-ink);}
 
   if(API && API.baseUrl){
     mode = 'api';
-    ensureToken().then(function(ok){
-      if(!ok){ setSync('Chưa có mã truy cập'); showBanner('Cần mã truy cập để mở chuyến đi này. Tải lại trang để nhập.'); return; }
-      return apiFetch('GET','session').then(function(s){
-        ROLE = (s && s.role) || 'member';
-        if(s && s.activeTripId) TRIP = s.activeTripId;
-        if(ROLE === 'admin') $('tripBtn').hidden = false;
+    if(loadSession()){
+      // có phiên cũ: kiểm tra còn hạn không rồi vào thẳng
+      apiFetch('GET','me').then(function(d){
+        ME = d.user; MY_TRIPS = d.trips || [];
+        TRIP = d.user.currentTripId || (MY_TRIPS[0] && MY_TRIPS[0].id) || null;
+        enterApp();
       }).catch(function(err){
-        if(err && err.status === 401){
-          forgetToken(); setSync('Mã không đúng');
-          showBanner('Mã truy cập không đúng. Tải lại trang để nhập lại.');
-          throw err;
+        if(err && err.status === 401){ forgetToken(); showLogin(''); }
+        else {
+          // máy chủ trục trặc chứ không phải phiên hỏng, giữ phiên lại
+          showLogin('Không kết nối được máy chủ. Thử lại sau giây lát.');
         }
-      }).then(function(){
-        pullApi();
-        setInterval(pullApi, 6000);
       });
-    }).catch(function(){});
+    } else {
+      showLogin('');
+    }
   } else if(window.claude && typeof window.claude.use === 'function'){
+    $('app').hidden = false;
     window.claude.use('db').then(function(cap){
       if(!cap){
         mode='local'; setSync('Lưu trên máy này');
@@ -1477,6 +1735,7 @@ nav button.on{color:var(--sea-ink);}
       subClaude();
     }).catch(function(){ mode='local'; setSync('Lưu trên máy này'); });
   } else {
+    $('app').hidden = false;
     setSync('Lưu trên máy này');
   }
 })();

@@ -7,6 +7,8 @@ API chạy dạng serverless trên Vercel, giao diện tối ưu cho điện tho
 
 ```
 index.html              giao diện, chạy thẳng trên trình duyệt, không cần build
+manifest.webmanifest    khai báo để cài ra màn hình chính như một app
+icon-*.png              biểu tượng app
 api/index.js            toàn bộ API (xác thực + dữ liệu), một serverless function
 vercel.json             chuyển mọi đường dẫn /api/* về function trên
 mongodb-setup.js         script tạo collection, validator và index trên Atlas
@@ -96,6 +98,23 @@ với trước đây là cả nhóm dùng chung một chuyến. Chuyến đang m
 Dữ liệu các chuyến tách biệt hoàn toàn nhờ trường `tripId`, chuyển qua lại bao nhiêu
 lần cũng không mất gì. Mã chuyến sinh tự động từ tên, ví dụ "Đà Lạt tháng 10" thành
 `da-lat-thang-10-k3f9`.
+
+## Cài ra màn hình chính
+
+App khai báo manifest nên cài được như một ứng dụng thật, chạy toàn màn hình,
+không có thanh địa chỉ.
+
+- **iPhone (Safari):** nút Chia sẻ → *Thêm vào MH chính*
+- **Android (Chrome):** menu ba chấm → *Cài đặt ứng dụng*
+
+Giao diện khoá ở mức phóng to 100% để layout không vỡ: chụm hai ngón, chạm hai
+lần và Ctrl+cuộn đều bị chặn. Riêng Safari trên iOS bỏ qua thẻ meta
+`user-scalable=no` khi duyệt web thường, nên việc chặn được làm thẳng ở cử chỉ
+chạm — cài ra màn hình chính thì khoá chắc hơn nữa.
+
+Đánh đổi: người cần phóng to để đọc sẽ không phóng được. Nếu muốn bỏ khoá, xoá
+`maximum-scale=1, user-scalable=no` trong thẻ viewport và bỏ đoạn chặn cử chỉ ở
+đầu khối script.
 
 ## Khi app báo mất kết nối
 

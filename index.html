@@ -2,7 +2,16 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#EAEEF1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E171E" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Quỹ nhóm">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" href="/icon-192.png" sizes="192x192">
 <title>Quỹ nhóm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -49,7 +58,19 @@ body{
   font-size:15px;line-height:1.5;
   padding-bottom:calc(76px + var(--safe-b));
   overscroll-behavior-y:none;
+  /* chạm hai lần không phóng to, và iOS không tự chỉnh cỡ chữ khi xoay máy */
+  touch-action:manipulation;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
 }
+/* Chữ trong giao diện không bôi đen được khi chạm giữ, nhưng nội dung người
+   dùng nhập thì vẫn chọn và sao chép được như bình thường. */
+body{-webkit-user-select:none;user-select:none;}
+input,textarea,.note-body,.item .sub,.log .b,.pline,.pmeta{
+  -webkit-user-select:text;user-select:text;
+}
+/* iOS vẫn cho phép chạm giữ để mở menu trên nút; tắt đi cho giống app */
+button,nav,header{-webkit-touch-callout:none;}
 body.locked{overflow:hidden;}
 .app{max-width:560px;margin:0 auto;padding:0 14px;}
 
@@ -446,6 +467,22 @@ nav button.on{color:var(--sea-ink);}
 <script>
 (function(){
   "use strict";
+
+  // ---- chạy như một app: chặn phóng to làm vỡ layout ----
+  // Safari trên iOS bỏ qua user-scalable=no khi duyệt web thường, nên phải
+  // chặn thẳng cử chỉ chụm tay. Thêm vào đó là chạm nhanh hai lần.
+  ['gesturestart','gesturechange','gestureend'].forEach(function(ev){
+    document.addEventListener(ev, function(e){ e.preventDefault(); }, {passive:false});
+  });
+  // Chạm hai lần đã do touch-action:manipulation trong CSS lo; chặn thêm ở
+  // touchend sẽ nuốt luôn cú chạm thứ hai khi người dùng bấm nhanh liên tiếp.
+  // Chụm hai ngón trên trình duyệt desktop và một số máy Android
+  document.addEventListener('wheel', function(e){
+    if(e.ctrlKey) e.preventDefault();
+  }, {passive:false});
+  document.addEventListener('keydown', function(e){
+    if((e.ctrlKey || e.metaKey) && ['+','-','=','0'].indexOf(e.key) !== -1) e.preventDefault();
+  });
 
   var db = null;
   var API = window.GROUP_FUND_API || null;

@@ -96,6 +96,13 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 0 8px;
 .trip-row .now{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sea-tint);color:var(--sea-ink);}
 .trip-row .who{font-size:11px;color:var(--ink-soft);}
 
+/* Form thêm khoản chi nằm sẵn trong trang nhưng được cất đi; khi mở thì
+   chuyển nguyên node vào bottom sheet, nhờ vậy giữ nguyên mọi sự kiện đã gắn. */
+.form-holder{display:none;}
+.add-cta{margin-bottom:12px;}
+#expenseForm{margin-bottom:0;box-shadow:none;border:none;}
+#expenseForm .card-b{padding:0;}
+
 /* ---- màn đăng nhập ---- */
 .login{
   position:fixed;inset:0;z-index:60;background:var(--bg);
@@ -348,8 +355,9 @@ nav button.on{color:var(--sea-ink);}
   </section>
 
   <section class="panel" id="p-spend">
-    <div class="card">
-      <div class="card-h">Thêm khoản chi</div>
+    <button class="btn add-cta" id="openExpense" type="button">＋ Thêm khoản chi</button>
+    <div class="form-holder" id="expenseHolder">
+    <div class="card" id="expenseForm">
       <div class="card-b">
         <label class="f" for="eTitle">Chi cho việc gì</label>
         <input type="text" id="eTitle" placeholder="Ăn tối, taxi, vé tham quan…" autocomplete="off">
@@ -372,8 +380,10 @@ nav button.on{color:var(--sea-ink);}
           <div class="chips" id="eWho"></div>
           <div class="hint" id="whoHint"></div>
         </div>
+        <div class="login-err" id="eErr" hidden></div>
         <button class="btn mt" id="addExpense">Thêm khoản chi</button>
       </div>
+    </div>
     </div>
     <div class="card">
       <div class="card-h">Các khoản đã chi</div>
@@ -549,7 +559,14 @@ nav button.on{color:var(--sea-ink);}
 
   // ================= DIALOGS =================
   var sheetResolve = null;
+  // Form thêm khoản chi là node thật trong trang chứ không phải HTML dựng lại
+  // mỗi lần mở, nên phải cất về chỗ cũ trước khi sheet bị xoá nội dung.
+  function stashExpenseForm(){
+    var f = $('expenseForm');
+    if(f && f.parentNode === $('sheet')) $('expenseHolder').appendChild(f);
+  }
   function closeSheet(val){
+    stashExpenseForm();
     $('scrim').classList.remove('on');
     document.body.classList.remove('locked');
     var r = sheetResolve; sheetResolve = null;
@@ -558,6 +575,7 @@ nav button.on{color:var(--sea-ink);}
   function openSheet(html, wire){
     return new Promise(function(resolve){
       sheetResolve = resolve;
+      stashExpenseForm();
       $('sheet').innerHTML = html;
       $('scrim').classList.add('on');
       document.body.classList.add('locked');
@@ -1113,16 +1131,48 @@ nav button.on{color:var(--sea-ink);}
     renderWho();
   });
 
+  function expenseErr(msg){
+    var e = $('eErr');
+    if(!msg){ e.hidden = true; return; }
+    e.textContent = msg; e.hidden = false;
+  }
+  // Mở form trong bottom sheet: chuyển nguyên node sang nên mọi sự kiện,
+  // gợi ý số tiền và lựa chọn đang có đều giữ nguyên.
+  function openExpenseSheet(){
+    if(!alive().length){
+      showBanner('Thêm thành viên trước khi ghi khoản chi.');
+      return;
+    }
+    expenseErr('');
+    sheetResolve = null;
+    $('sheet').innerHTML = '<h3>Khoản chi mới</h3>';
+    $('sheet').appendChild($('expenseForm'));
+    var cancel = document.createElement('button');
+    cancel.className = 'btn ghost';
+    cancel.type = 'button';
+    cancel.textContent = 'Huỷ';
+    cancel.addEventListener('click', function(){ closeSheet(null); });
+    $('sheet').appendChild(cancel);
+    $('scrim').classList.add('on');
+    document.body.classList.add('locked');
+    $('sheet').scrollTop = 0;
+    setTimeout(function(){ $('eTitle').focus(); }, 80);
+  }
+  $('openExpense').addEventListener('click', openExpenseSheet);
+
   $('addExpense').addEventListener('click', function(){
     var title=$('eTitle').value.trim();
     var amount=Number(digits($('eAmount').value))||0;
     var payerId=$('ePayer').value;
-    if(!payerId){ showBanner('Thêm thành viên trước khi ghi khoản chi.'); return; }
-    if(!title){ $('eTitle').focus(); return; }
-    if(amount<=0){ $('eAmount').focus(); return; }
+    if(!payerId){ expenseErr('Thêm thành viên trước khi ghi khoản chi.'); return; }
+    if(!title){ expenseErr('Nhập tên khoản chi.'); $('eTitle').focus(); return; }
+    if(amount<=0){ expenseErr('Nhập số tiền.'); $('eAmount').focus(); return; }
     var who = selectedWho.filter(function(id){ return !isGone(id); });
-    if(!who.length){ showBanner('Chọn ít nhất một người để chia khoản chi này.'); return; }
+    if(!who.length){ expenseErr('Chọn ít nhất một người để chia khoản chi này.'); return; }
+    expenseErr('');
     showBanner('');
+    // Hợp lệ rồi mới đóng sheet, vì hộp xác nhận bên dưới cũng dùng chung sheet này.
+    closeSheet(null);
     var fromFund = (payerId===meta.holderId), t = totals();
     if(fromFund && amount > t.remain){
       askConfirm({title:'Vượt quá quỹ còn lại',
@@ -1142,7 +1192,9 @@ nav button.on{color:var(--sea-ink);}
     logAct('ghi khoản chi "'+title+'" '+fmt(amount)+', '+nameOf(payerId)+' đưa tiền'+
            (fromFund?' từ quỹ':' tiền túi')+', chia cho '+who.length+' người');
     $('eTitle').value=''; $('eAmount').clearMoney(); selectedWho=[];
-    render(); $('eTitle').focus();
+    expenseErr('');
+    // Không focus lại ô tên: sheet đã đóng, focus sẽ bật bàn phím lên vô cớ.
+    render();
   }
 
   $('expenseList').addEventListener('click', function(ev){

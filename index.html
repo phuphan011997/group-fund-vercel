@@ -247,6 +247,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--sea);outline-off
 .log .t{flex:0 0 68px;font-size:11.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums;line-height:1.35;padding-top:2px;}
 .log .b{flex:1;min-width:0;word-break:break-word;}
 .log .who{font-weight:600;}
+.log .uname{font-weight:400;color:var(--ink-soft);}
 .log.del .b{color:var(--rose);}
 
 nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding-bottom:var(--safe-b);display:flex;}
@@ -441,13 +442,6 @@ nav button.on{color:var(--sea-ink);}
 
   <section class="panel" id="p-log">
     <div class="card">
-      <div class="card-b">
-        <label class="f" for="meName">Tôi là</label>
-        <select id="meName"></select>
-        <div class="hint">Chọn tên để các thao tác của bạn được ghi lại kèm tên. Lưu riêng trên máy này.</div>
-      </div>
-    </div>
-    <div class="card">
       <div class="card-h">Lịch sử thao tác</div>
       <div id="logList"></div>
     </div>
@@ -496,7 +490,6 @@ nav button.on{color:var(--sea-ink);}
   var meta = { name:"Quỹ nhóm", holderId:null, note:"" };
   var selectedWho = [];
   var openLines = {};
-  var meId = null;
 
   var $ = function(id){ return document.getElementById(id); };
   function fmt(n){ return (Math.round(Number(n)||0)).toLocaleString('vi-VN') + 'đ'; }
@@ -668,7 +661,7 @@ nav button.on{color:var(--sea-ink);}
     if(coll==='expenses') return {title:o.title, amount:o.amount, payerId:o.payerId, fromFund:!!o.fromFund,
                                   participantIds:o.participantIds||[], createdAt:o.createdAt||Date.now()};
     if(coll==='plans') return {title:o.title, date:o.date||'', time:o.time||'', note:o.note||'', createdAt:o.createdAt||Date.now()};
-    if(coll==='logs') return {at:o.at, who:o.who||'', text:o.text||'', kind:o.kind||''};
+    if(coll==='logs') return {at:o.at, who:o.who||'', whoName:o.whoName||'', text:o.text||'', kind:o.kind||''};
     return {};
   }
   function apiCall(method, path, body){
@@ -727,12 +720,11 @@ nav button.on{color:var(--sea-ink);}
   }
 
   // ================= LOG =================
-  function meLabel(){
-    if(meId){ var m = byId(meId); if(m) return m.name; }
-    return 'Ai đó';
-  }
   function logAct(text, kind){
-    var l = { id:newId(), at:Date.now(), who:meLabel(), text:text, kind:kind||'' };
+    // who/whoName do máy chủ gắn từ phiên đăng nhập; ở chế độ chạy cục bộ
+    // thì không có tài khoản nên để trống.
+    var l = { id:newId(), at:Date.now(), text:text, kind:kind||'' };
+    if(ME){ l.who = ME.username; l.whoName = ME.name; }
     logs.push(l); put('logs', l);
     var extra = logs.slice().sort(function(a,b){ return (a.at||0)-(b.at||0); });
     while(extra.length > 300){
@@ -780,7 +772,7 @@ nav button.on{color:var(--sea-ink);}
     $('bFund').textContent = fmt(t.fund);
     $('bSpent').textContent = fmt(t.spent);
     renderMembers(); renderPayer(); renderWho(); renderExpenses();
-    renderPlans(); syncNoteBox(); renderStats(t); renderMeSelect(); renderLogs();
+    renderPlans(); syncNoteBox(); renderStats(t); renderLogs();
   }
 
   function renderMembers(){
@@ -916,13 +908,6 @@ nav button.on{color:var(--sea-ink);}
       }).join('');
   }
 
-  function renderMeSelect(){
-    var sel=$('meName'), list=alive();
-    sel.innerHTML = '<option value="">— chưa chọn —</option>' +
-      list.map(function(m){ return '<option value="'+m.id+'">'+esc(m.name)+'</option>'; }).join('');
-    if(meId && sel.querySelector('option[value="'+meId+'"]')) sel.value = meId;
-    else if(meId){ meId = null; try{ localStorage.removeItem('groupFund.me'); }catch(e){} }
-  }
   function renderLogs(){
     var el=$('logList');
     if(!logs.length){ el.innerHTML='<div class="empty">Chưa có thao tác nào được ghi lại.</div>'; return; }
@@ -931,8 +916,13 @@ nav button.on{color:var(--sea-ink);}
       var d = new Date(l.at||Date.now());
       var when = d.toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit'}) + '<br>' +
                  d.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+      // Log mới: who là username, whoName là tên hiển thị.
+      // Log cũ chỉ có who là tên người tự khai, giữ nguyên cách hiện.
+      var actor = l.whoName
+        ? esc(l.whoName) + ' <span class="uname">@' + esc(l.who) + '</span>'
+        : esc(l.who || 'Ai đó');
       return '<div class="log'+(l.kind==='del'?' del':'')+'"><div class="t">'+when+'</div>' +
-        '<div class="b"><span class="who">'+esc(l.who||'Ai đó')+'</span> '+esc(l.text)+'</div></div>';
+        '<div class="b"><span class="who">'+actor+'</span> '+esc(l.text)+'</div></div>';
     }).join('');
   }
 
@@ -1408,10 +1398,6 @@ nav button.on{color:var(--sea-ink);}
   });
 
   // ================= ACTIONS: MISC =================
-  $('meName').addEventListener('change', function(){
-    meId = this.value || null;
-    try{ meId ? localStorage.setItem('groupFund.me', meId) : localStorage.removeItem('groupFund.me'); }catch(e){}
-  });
 
   $('statsList').addEventListener('click', function(ev){
     var b=ev.target.closest('[data-lines]'); if(!b) return;
@@ -1697,7 +1683,6 @@ nav button.on{color:var(--sea-ink);}
   $('adminBtn').addEventListener('click', openAdminSheet);
 
   // ================= BOOT =================
-  try{ meId = localStorage.getItem('groupFund.me') || localStorage.getItem('quy-me') || null; }catch(e){}
   loadLocal();
   if(!$('pDate').value) $('pDate').value = new Date().toISOString().slice(0,10);
   render();

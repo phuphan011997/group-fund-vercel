@@ -380,6 +380,13 @@ module.exports = async function handler(req, res) {
         const body = Object.assign({}, readBody(req));
         delete body._id;
         delete body.id;
+        // Người thực hiện do máy chủ gắn từ phiên đăng nhập, không lấy theo
+        // dữ liệu client gửi lên — nếu không thì ai cũng ghi log dưới tên
+        // người khác được.
+        if (coll === "logs") {
+          body.who = me._id;
+          body.whoName = me.name || me._id;
+        }
         await db.collection(coll).updateOne(
           { _id: id },
           { $set: Object.assign({}, body, { tripId }) },

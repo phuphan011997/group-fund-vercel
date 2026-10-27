@@ -105,7 +105,8 @@ ensure("logs", {
     _id:    { bsonType: "string" },
     tripId: { bsonType: "string" },
     at:     { bsonType: ["date", "long", "double", "int"] },
-    who:    { bsonType: "string" },
+    who:     { bsonType: "string", description: "username người thực hiện, máy chủ tự gắn từ phiên" },
+    whoName: { bsonType: "string", description: "tên hiển thị tại thời điểm ghi" },
     text:   { bsonType: "string" },
     kind:   { bsonType: "string", description: "'del' cho thao tác xoá, để tô màu" }
   }

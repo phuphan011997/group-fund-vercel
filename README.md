@@ -137,8 +137,9 @@ Xem log chi tiết ở Vercel: tab **Deployments → Runtime Logs**.
 
 **Về bảo mật.** Mỗi người một tài khoản riêng, nhưng trong cùng một chuyến thì mọi
 thành viên đều sửa được mọi số liệu — app không khoá theo từng khoản chi. Tab Lịch sử
-vẫn ghi theo tên người tự chọn chứ chưa gắn với tài khoản đăng nhập. Với một quỹ đi
-chơi thì đủ dùng; đừng đưa dữ liệu nhạy cảm hơn vào đây.
+ghi lại ai làm gì theo username, và username đó do máy chủ gắn từ phiên đăng nhập chứ
+không lấy theo dữ liệu client gửi lên, nên không ai ghi log dưới tên người khác được.
+Với một quỹ đi chơi thì đủ dùng; đừng đưa dữ liệu nhạy cảm hơn vào đây.
 
 Đổi `ADMIN_SECRET` trên Vercel thì các admin phải dùng mã mới ở lần đăng nhập sau,
 còn phiên đang mở vẫn chạy tiếp cho tới khi hết hạn.

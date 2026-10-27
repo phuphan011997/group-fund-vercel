@@ -190,6 +190,11 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--sea);outline-off
   color:var(--ink);cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap;
 }
 .sug:active{background:var(--sea-tint);color:var(--sea-ink);}
+/* Trong bottom sheet, gợi ý dạng nổi sẽ che mất dòng chú thích bên dưới.
+   Cho nó nằm thành dòng riêng và đẩy nội dung xuống. */
+.sheet .sugs{position:static;padding:0;margin-top:7px;border:none;background:none;box-shadow:none;}
+.sheet .sugs::before{display:none;}
+.sheet .sug{background:var(--surface-2);border:1px solid var(--line);}
 
 .btn{display:block;width:100%;font-family:inherit;font-size:15px;font-weight:600;padding:13px;border-radius:10px;border:1px solid var(--sea-ink);background:var(--sea-ink);color:var(--on-accent);cursor:pointer;}
 .btn:active{transform:scale(.99);}
@@ -198,6 +203,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--sea);outline-off
 .btn.danger{background:transparent;color:var(--rose);border-color:var(--rose);}
 
 .chips{display:flex;flex-wrap:wrap;gap:7px;}
+.chips.quick{margin-top:8px;}
+.chips.quick .chip{padding:6px 11px;font-size:13px;}
 .chip{font-family:inherit;font-size:14px;padding:8px 13px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-soft);cursor:pointer;}
 .chip[aria-pressed="true"]{background:var(--sea-tint);border-color:var(--sea);color:var(--sea-ink);font-weight:600;}
 .chip.all{border-style:dashed;}
@@ -267,7 +274,7 @@ nav button.on{color:var(--sea-ink);}
 
 .scrim{position:fixed;inset:0;z-index:50;background:rgba(10,20,28,.45);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .16s;}
 .scrim.on{opacity:1;pointer-events:auto;}
-.sheet{width:100%;max-width:560px;background:var(--surface);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + var(--safe-b));max-height:88vh;overflow-y:auto;transform:translateY(14px);transition:transform .16s;}
+.sheet{width:100%;max-width:560px;background:var(--surface);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + var(--safe-b));max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;transform:translateY(14px);transition:transform .16s;}
 .scrim.on .sheet{transform:translateY(0);}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 .sheet h3{margin:0 0 4px;font-size:18px;font-weight:700;}
@@ -361,6 +368,7 @@ nav button.on{color:var(--sea-ink);}
       <div class="card-b">
         <label class="f" for="eTitle">Chi cho việc gì</label>
         <input type="text" id="eTitle" placeholder="Ăn tối, taxi, vé tham quan…" autocomplete="off">
+        <div class="chips quick" id="eTitleQuick"></div>
         <div class="row2 mt">
           <div>
             <label class="f" for="eAmount">Số tiền</label>
@@ -809,16 +817,17 @@ nav button.on{color:var(--sea-ink);}
 
   function renderPayer(){
     var sel = $('ePayer'), prev = sel.value, list = alive();
-    sel.innerHTML = list.length
-      ? list.map(function(m){ return '<option value="'+m.id+'">'+esc(m.name)+'</option>'; }).join('')
-      : '<option value="">— chưa có thành viên —</option>';
+    // Để trống mặc định: trước đây tự chọn người giữ quỹ nên rất dễ ghi nhầm
+    // người đưa tiền mà không ai để ý.
+    sel.innerHTML = '<option value="">' +
+      (list.length ? '— chọn người —' : '— chưa có thành viên —') + '</option>' +
+      list.map(function(m){ return '<option value="'+m.id+'">'+esc(m.name)+'</option>'; }).join('');
     if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
-    else if(meta.holderId && sel.querySelector('option[value="'+meta.holderId+'"]')) sel.value = meta.holderId;
     updatePayerHint();
   }
   function updatePayerHint(){
     var h=$('payerHint'), v=$('ePayer').value;
-    if(!v){ h.textContent=''; return; }
+    if(!v){ h.textContent='Chọn người thực sự đưa tiền cho khoản này.'; return; }
     if(v===meta.holderId){
       h.textContent = 'Là người giữ quỹ — khoản này sẽ trừ vào quỹ chung (còn '+fmt(totals().remain)+').';
     } else {
@@ -1131,6 +1140,27 @@ nav button.on{color:var(--sea-ink);}
     renderWho();
   });
 
+  // Gợi ý nhanh tên khoản chi, chạm là điền luôn.
+  var QUICK_TITLES = ['Ăn sáng','Ăn trưa','Ăn tối','Cà phê','Nước uống',
+                      'Taxi','Xăng xe','Khách sạn','Vé tham quan','Đồ ăn vặt'];
+  function renderTitleQuick(){
+    var el = $('eTitleQuick'), cur = $('eTitle').value.trim().toLowerCase();
+    el.innerHTML = QUICK_TITLES.map(function(t){
+      return '<button class="chip" type="button" data-title="'+esc(t)+'" aria-pressed="'+
+        (t.toLowerCase()===cur)+'">'+esc(t)+'</button>';
+    }).join('');
+  }
+  $('eTitleQuick').addEventListener('click', function(ev){
+    var b = ev.target.closest('[data-title]'); if(!b) return;
+    var t = $('eTitle');
+    // chạm lại vào gợi ý đang chọn thì bỏ chọn
+    t.value = (t.value.trim() === b.dataset.title) ? '' : b.dataset.title;
+    renderTitleQuick();
+    expenseErr('');
+    if(t.value && !digits($('eAmount').value)) $('eAmount').focus();
+  });
+  $('eTitle').addEventListener('input', renderTitleQuick);
+
   function expenseErr(msg){
     var e = $('eErr');
     if(!msg){ e.hidden = true; return; }
@@ -1144,6 +1174,7 @@ nav button.on{color:var(--sea-ink);}
       return;
     }
     expenseErr('');
+    renderTitleQuick();
     sheetResolve = null;
     $('sheet').innerHTML = '<h3>Khoản chi mới</h3>';
     $('sheet').appendChild($('expenseForm'));
@@ -1164,8 +1195,9 @@ nav button.on{color:var(--sea-ink);}
     var title=$('eTitle').value.trim();
     var amount=Number(digits($('eAmount').value))||0;
     var payerId=$('ePayer').value;
-    if(!payerId){ expenseErr('Thêm thành viên trước khi ghi khoản chi.'); return; }
+    if(!alive().length){ expenseErr('Thêm thành viên trước khi ghi khoản chi.'); return; }
     if(!title){ expenseErr('Nhập tên khoản chi.'); $('eTitle').focus(); return; }
+    if(!payerId){ expenseErr('Chọn người đưa tiền.'); $('ePayer').focus(); return; }
     if(amount<=0){ expenseErr('Nhập số tiền.'); $('eAmount').focus(); return; }
     var who = selectedWho.filter(function(id){ return !isGone(id); });
     if(!who.length){ expenseErr('Chọn ít nhất một người để chia khoản chi này.'); return; }
@@ -1192,7 +1224,7 @@ nav button.on{color:var(--sea-ink);}
     logAct('ghi khoản chi "'+title+'" '+fmt(amount)+', '+nameOf(payerId)+' đưa tiền'+
            (fromFund?' từ quỹ':' tiền túi')+', chia cho '+who.length+' người');
     $('eTitle').value=''; $('eAmount').clearMoney(); selectedWho=[];
-    expenseErr('');
+    $('ePayer').value=''; renderTitleQuick(); expenseErr('');
     // Không focus lại ô tên: sheet đã đóng, focus sẽ bật bàn phím lên vô cớ.
     render();
   }

@@ -7,7 +7,7 @@ API chạy dạng serverless trên Vercel, giao diện tối ưu cho điện tho
 
 ```
 index.html              giao diện, chạy thẳng trên trình duyệt, không cần build
-api/index.js            toàn bộ API, chạy như một serverless function
+api/index.js            toàn bộ API (xác thực + dữ liệu), một serverless function
 vercel.json             chuyển mọi đường dẫn /api/* về function trên
 mongodb-setup.js         script tạo collection, validator và index trên Atlas
 package.json
@@ -17,8 +17,9 @@ package.json
 
 1. Vào cluster của bạn, mở tab **MongoSH** (hoặc chạy `mongosh` ở máy).
 2. Dán toàn bộ nội dung `mongodb-setup.js` vào rồi chạy.
-   Script tạo database `group_fund` với 5 collection, các validator, index, và một
-   chuyến mẫu tên `trip-1`.
+   Script tạo database `group_fund` với 7 collection (trips, members, expenses,
+   plans, logs, users, sessions), các validator và index, trong đó có TTL tự xoá
+   phiên đăng nhập quá hạn.
 3. Vào **Network Access**, thêm `0.0.0.0/0` vào danh sách cho phép.
    Serverless của Vercel không có IP cố định nên bắt buộc phải mở như vậy;
    tài khoản và mật khẩu trong chuỗi kết nối vẫn là lớp bảo vệ.
@@ -44,42 +45,57 @@ git push -u origin main
    | Tên | Giá trị |
    |---|---|
    | `MONGODB_URI` | chuỗi kết nối Atlas, nhớ thêm `/group_fund` trước dấu `?` |
-   | `APP_TOKEN` | mã cho thành viên, một chuỗi ngẫu nhiên bạn tự đặt |
-   | `ADMIN_TOKEN` | mã cho người quản lý, **phải khác** `APP_TOKEN` |
+   | `ADMIN_SECRET` | mã bí mật quản trị, chỉ bạn biết |
 
 4. Bấm **Deploy**.
 
-Sinh chuỗi ngẫu nhiên cho `APP_TOKEN`:
+Sinh chuỗi ngẫu nhiên cho `ADMIN_SECRET`:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
 ```
 
-## Bước 4 — dùng
+## Bước 4 — tạo tài khoản admin đầu tiên
 
-Mở địa chỉ Vercel cấp cho bạn. Lần đầu app hỏi **mã truy cập**. Có hai mã:
+Mở địa chỉ Vercel cấp cho bạn. Màn đăng nhập hiện ra:
 
-- Nhập `APP_TOKEN` → vào với tư cách **thành viên**: nhập liệu bình thường, không
-  thấy nút quản lý chuyến.
-- Nhập `ADMIN_TOKEN` → vào với tư cách **quản lý**: header hiện thêm nút `⇄` để
-  xem danh sách chuyến, tạo chuyến mới, và chọn chuyến nào đang mở.
+1. Bấm **Tôi là quản trị viên**.
+2. Nhập tên đăng nhập và mật khẩu bạn muốn dùng, cùng với `ADMIN_SECRET`.
+3. Bấm Đăng nhập.
 
-Máy đó sẽ nhớ mã, lần sau không hỏi lại. Gửi link kèm `APP_TOKEN` cho mọi người
-trong nhóm, giữ `ADMIN_TOKEN` cho riêng bạn.
+Vì database chưa có tài khoản nào, lần đăng nhập này tạo luôn tài khoản admin cho
+bạn. Từ lần thứ hai trở đi, cơ chế này đóng lại: ai nhập đúng `ADMIN_SECRET` nhưng
+username lạ cũng chỉ nhận về lỗi đăng nhập.
 
-Nếu ai đó nhập sai mã, app báo ngay và không đọc được gì.
+## Tài khoản và phân quyền
+
+**Thành viên** chỉ cần tên đăng nhập và mật khẩu. Họ nhập liệu bình thường trong
+những chuyến được gán, và tự đổi qua lại giữa các chuyến đó bằng nút `⇄`.
+
+**Quản trị viên** phải nhập thêm `ADMIN_SECRET` **mỗi lần** đăng nhập, kể cả khi mật
+khẩu đã đúng. Mật khẩu bị lộ vẫn chưa đủ để vào được quyền admin. Header của admin
+có thêm nút `⚙` để:
+
+- tạo chuyến đi mới
+- tạo tài khoản, đặt lại mật khẩu, đổi vai trò, xoá tài khoản
+- gán chuyến nào cho ai, bằng cách bấm chọn trong danh sách chuyến
+
+Đăng nhập xong, máy đó nhớ phiên **30 ngày** rồi mới hỏi lại. Đổi mật khẩu hoặc đổi
+vai trò của một người sẽ huỷ mọi phiên đang mở của người đó, nên họ phải đăng nhập lại.
+
+Mật khẩu lưu dưới dạng băm scrypt kèm salt riêng từng người, database không giữ mật
+khẩu gốc. Phân quyền kiểm tra ở phía API chứ không chỉ ẩn nút: thành viên gọi thẳng
+API để xem danh sách tài khoản, tạo chuyến, hay đọc chuyến chưa được gán đều nhận 403.
 
 ## Nhiều chuyến đi
 
-Cả nhóm dùng chung một link, chuyến nào đang mở do admin quyết định và lưu trên
-server. Admin bấm `⇄`, chọn chuyến khác hoặc tạo chuyến mới, mọi người đang mở app
-sẽ tự chuyển theo trong khoảng 6 giây mà không cần deploy lại hay đổi link.
+Mỗi người có danh sách chuyến riêng do admin gán, và tự chọn chuyến muốn mở — khác
+với trước đây là cả nhóm dùng chung một chuyến. Chuyến đang mở lưu theo tài khoản nên
+đổi máy vẫn giữ nguyên.
 
 Dữ liệu các chuyến tách biệt hoàn toàn nhờ trường `tripId`, chuyển qua lại bao nhiêu
 lần cũng không mất gì. Mã chuyến sinh tự động từ tên, ví dụ "Đà Lạt tháng 10" thành
 `da-lat-thang-10-k3f9`.
-
-Thành viên thường không tạo hay chuyển chuyến được; API trả về 403 nếu thử.
 
 ## Khi app báo mất kết nối
 
@@ -89,22 +105,24 @@ mã truy cập và cho biết hỏng ở khâu nào:
 | Kết quả | Nghĩa là | Cách sửa |
 |---|---|---|
 | Trang 404 của Vercel | function không được nhận diện | Kiểm tra `api/index.js` và `vercel.json` đều có trong repo trên GitHub (xem trực tiếp trên web GitHub cho chắc) |
-| `hasMongoUri: false` hoặc `hasAppToken: false` | thiếu biến môi trường | Thêm biến trên Vercel rồi **Redeploy** — biến mới không tự áp dụng cho bản đã deploy |
+| `hasMongoUri: false` hoặc `hasAdminSecret: false` | thiếu biến môi trường | Thêm biến trên Vercel rồi **Redeploy** — biến mới không tự áp dụng cho bản đã deploy |
 | `db: "loi"` kèm `dbError` nhắc timeout | Atlas chặn IP | Network Access thêm `0.0.0.0/0` |
 | `db: "loi"` kèm `dbError` nhắc authentication | sai user/mật khẩu | Kiểm tra lại chuỗi kết nối, mật khẩu có ký tự đặc biệt phải mã hoá URL |
-| `db: "ket-noi-duoc"` mà app vẫn lỗi | mã truy cập sai | Xoá dữ liệu trang trong trình duyệt rồi nhập lại mã đúng |
-| Đăng nhập bằng `ADMIN_TOKEN` mà không thấy nút `⇄` | chưa khai biến `ADMIN_TOKEN` trên Vercel | Thêm biến rồi Redeploy |
+| `db: "ket-noi-duoc"`, `userCount: 0` | chưa có tài khoản nào | Đăng nhập lần đầu theo Bước 4 để tạo admin |
+| Không tạo được admin đầu tiên dù nhập đúng secret | `userCount` đã lớn hơn 0 | Dùng tài khoản admin đã có; nếu quên mật khẩu, xoá document trong collection `users` trên Atlas rồi làm lại Bước 4 |
+| Admin báo cần mã quản trị dù đã nhập | `ADMIN_SECRET` trên Vercel khác mã đang nhập | Đối chiếu lại biến rồi Redeploy |
 
 Xem log chi tiết ở Vercel: tab **Deployments → Runtime Logs**.
 
 ## Vài điều nên biết
 
-**Về mã truy cập.** Hai mã này là mật khẩu chung theo vai trò chứ không phải tài
-khoản riêng từng người. Ai có `APP_TOKEN` đều sửa được mọi số liệu, và app không
-phân biệt được ai là ai ngoài việc mỗi người tự chọn tên mình ở tab Lịch sử.
-`ADMIN_TOKEN` chỉ thêm quyền quản lý chuyến, không phải quyền cao hơn về dữ liệu.
-Với một quỹ đi chơi thì đủ dùng; đừng đưa dữ liệu nhạy cảm hơn vào đây. Muốn đổi
-mã, sửa biến trên Vercel rồi redeploy, mọi người sẽ được hỏi mã mới.
+**Về bảo mật.** Mỗi người một tài khoản riêng, nhưng trong cùng một chuyến thì mọi
+thành viên đều sửa được mọi số liệu — app không khoá theo từng khoản chi. Tab Lịch sử
+vẫn ghi theo tên người tự chọn chứ chưa gắn với tài khoản đăng nhập. Với một quỹ đi
+chơi thì đủ dùng; đừng đưa dữ liệu nhạy cảm hơn vào đây.
+
+Đổi `ADMIN_SECRET` trên Vercel thì các admin phải dùng mã mới ở lần đăng nhập sau,
+còn phiên đang mở vẫn chạy tiếp cho tới khi hết hạn.
 
 **Về giới hạn miễn phí.** Cluster M0 của Atlas cho 512MB, thừa sức cho vài trăm
 chuyến. Bản Hobby của Vercel giới hạn số lần gọi function; app hiện đồng bộ 6 giây
@@ -123,4 +141,4 @@ npm install
 vercel dev
 ```
 
-Tạo file `.env.local` với `MONGODB_URI` và `APP_TOKEN` để `vercel dev` đọc được.
+Tạo file `.env.local` với `MONGODB_URI` và `ADMIN_SECRET` để `vercel dev` đọc được.

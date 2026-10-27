@@ -274,10 +274,12 @@ nav button.on{color:var(--sea-ink);}
 
 .scrim{position:fixed;inset:0;z-index:50;background:rgba(10,20,28,.45);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .16s;}
 .scrim.on{opacity:1;pointer-events:auto;}
-.sheet{width:100%;max-width:560px;background:var(--surface);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + var(--safe-b));max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;transform:translateY(14px);transition:transform .16s;}
+.sheet{width:100%;max-width:560px;background:var(--surface);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + var(--safe-b));max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;scroll-padding-bottom:16px;transform:translateY(14px);transition:transform .16s;}
 .scrim.on .sheet{transform:translateY(0);}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 .sheet h3{margin:0 0 4px;font-size:18px;font-weight:700;}
+/* Chừa chỗ để ô đang gõ không bị bàn phím che khi cuộn tới */
+.sheet input,.sheet select,.sheet textarea{scroll-margin-bottom:96px;scroll-margin-top:12px;}
 .sheet p.msg{margin:0 0 14px;font-size:14px;color:var(--ink-soft);}
 .sheet .btn+.btn{margin-top:9px;}
 .opt{display:block;width:100%;text-align:left;font-family:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:12px;padding:13px 14px;margin-bottom:9px;}
@@ -577,6 +579,7 @@ nav button.on{color:var(--sea-ink);}
     stashExpenseForm();
     $('scrim').classList.remove('on');
     document.body.classList.remove('locked');
+    resetScrim();
     var r = sheetResolve; sheetResolve = null;
     if(r) r(val);
   }
@@ -588,10 +591,42 @@ nav button.on{color:var(--sea-ink);}
       $('scrim').classList.add('on');
       document.body.classList.add('locked');
       $('sheet').scrollTop = 0;
+      fitScrim();
       if(wire) wire($('sheet'));
     });
   }
   $('scrim').addEventListener('click', function(ev){ if(ev.target === $('scrim')) closeSheet(null); });
+
+  // Khi bàn phím hiện lên, trình duyệt thu nhỏ vùng nhìn thấy nhưng phần tử
+  // position:fixed vẫn bám theo khung cũ, nên đáy sheet nằm lọt sau bàn phím
+  // và trang bị đẩy lệch đi một đoạn. Bám theo visualViewport để sửa.
+  var vv = window.visualViewport;
+  function fitScrim(){
+    if(!vv || !$('scrim').classList.contains('on')) return;
+    var sc = $('scrim');
+    sc.style.height = vv.height + 'px';
+    sc.style.top = (vv.offsetTop || 0) + 'px';
+    sc.style.bottom = 'auto';
+    $('sheet').style.maxHeight = Math.round(vv.height * 0.92) + 'px';
+  }
+  function resetScrim(){
+    var sc = $('scrim');
+    sc.style.height = ''; sc.style.top = ''; sc.style.bottom = '';
+    $('sheet').style.maxHeight = '';
+  }
+  if(vv){
+    vv.addEventListener('resize', fitScrim);
+    vv.addEventListener('scroll', fitScrim);
+  }
+  // Ô đang gõ luôn được cuộn vào vùng nhìn thấy của sheet
+  $('sheet').addEventListener('focusin', function(ev){
+    var el = ev.target;
+    if(!el.matches('input,select,textarea')) return;
+    setTimeout(function(){
+      fitScrim();
+      if(el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:'smooth'});
+    }, 180);
+  });
   document.addEventListener('keydown', function(ev){ if(ev.key==='Escape' && sheetResolve) closeSheet(null); });
 
   function askConfirm(o){
@@ -1187,7 +1222,7 @@ nav button.on{color:var(--sea-ink);}
     $('scrim').classList.add('on');
     document.body.classList.add('locked');
     $('sheet').scrollTop = 0;
-    setTimeout(function(){ $('eTitle').focus(); }, 80);
+    fitScrim();
   }
   $('openExpense').addEventListener('click', openExpenseSheet);
 

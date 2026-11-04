@@ -274,7 +274,7 @@ nav button.on{color:var(--sea-ink);}
 
 .scrim{position:fixed;inset:0;z-index:50;background:rgba(10,20,28,.45);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .16s;}
 .scrim.on{opacity:1;pointer-events:auto;}
-.sheet{width:100%;max-width:560px;background:var(--surface);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + var(--safe-b));max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;scroll-padding-bottom:16px;transform:translateY(14px);transition:transform .16s;}
+.sheet{width:100%;max-width:560px;background:var(--surface);border-radius:18px 18px 0 0;padding:18px 16px calc(18px + var(--safe-b));max-height:88vh;max-height:88dvh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scroll-padding-bottom:16px;transform:translateY(14px);transition:transform .16s;}
 .scrim.on .sheet{transform:translateY(0);}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 .sheet h3{margin:0 0 4px;font-size:18px;font-weight:700;}
@@ -282,6 +282,13 @@ nav button.on{color:var(--sea-ink);}
 .sheet input,.sheet select,.sheet textarea{scroll-margin-bottom:96px;scroll-margin-top:12px;}
 .sheet p.msg{margin:0 0 14px;font-size:14px;color:var(--ink-soft);}
 .sheet .btn+.btn{margin-top:9px;}
+/* Nút Huỷ được gắn thẳng vào sheet, còn nút lưu nằm trong thẻ form nên hai
+   nút không phải anh em kề nhau — quy tắc .btn+.btn ở trên không khớp. */
+.sheet-cancel{margin-top:9px;}
+/* Viền focus vẽ ra ngoài mép ô nhập; trong sheet ô nhập chạm sát mép nên
+   viền vượt ra và sinh cuộn ngang. Cho viền vẽ vào trong, và chặn hẳn
+   cuộn ngang để không còn gì tràn được nữa. */
+.sheet input:focus,.sheet select:focus,.sheet textarea:focus{outline-offset:-2px;}
 .opt{display:block;width:100%;text-align:left;font-family:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:12px;padding:13px 14px;margin-bottom:9px;}
 .opt .t{font-weight:600;font-size:15px;}
 .opt .d{font-size:12.5px;color:var(--ink-soft);margin-top:3px;}
@@ -1214,7 +1221,7 @@ nav button.on{color:var(--sea-ink);}
     $('sheet').innerHTML = '<h3>Khoản chi mới</h3>';
     $('sheet').appendChild($('expenseForm'));
     var cancel = document.createElement('button');
-    cancel.className = 'btn ghost';
+    cancel.className = 'btn ghost sheet-cancel';
     cancel.type = 'button';
     cancel.textContent = 'Huỷ';
     cancel.addEventListener('click', function(){ closeSheet(null); });

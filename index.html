@@ -791,8 +791,18 @@ nav button.on{color:var(--sea-ink);}
     if(coll==='logs') return {at:o.at, who:o.who||'', whoName:o.whoName||'', text:o.text||'', kind:o.kind||''};
     return {};
   }
+  // Đếm số lệnh ghi đang bay, để vòng đồng bộ không kéo dữ liệu cũ về đè
+  // lên thay đổi vừa làm. Không có nó, đổi màu/tên xong sẽ thấy nhảy về
+  // giá trị cũ rồi vài giây sau mới đúng lại.
+  var pendingWrites = 0, lastWriteAt = 0, skippedPulls = 0;
+  function trackWrite(pr){
+    pendingWrites++; lastWriteAt = Date.now();
+    function done(){ pendingWrites = Math.max(0, pendingWrites-1); lastWriteAt = Date.now(); }
+    return pr.then(function(v){ done(); return v; }, function(e){ done(); throw e; });
+  }
   function apiCall(method, path, body){
-    return apiFetch(method, 'trips/' + encodeURIComponent(TRIP) + '/' + path, body);
+    var pr = apiFetch(method, 'trips/' + encodeURIComponent(TRIP) + '/' + path, body);
+    return (method === 'GET') ? pr : trackWrite(pr);
   }
   function apiFetch(method, path, body){
     return fetch(API.baseUrl.replace(/\/+$/,'') + '/' + path, {
@@ -1798,7 +1808,8 @@ nav button.on{color:var(--sea-ink);}
     }
     showBanner('');
     setSync('Đang tải…');
-    pullApi();
+    lastPulled = null;
+    pullApi(true);
     if(pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(pullApi, 6000);
   }
@@ -1842,7 +1853,8 @@ nav button.on{color:var(--sea-ink);}
       if(ME) ME.currentTripId = id;
       members=[]; expenses=[]; plans=[]; logs=[];
       setSync('Đang tải…'); showBanner('');
-      return pullApi();
+      lastPulled = null;
+      return pullApi(true);
     }).catch(function(){ showBanner('Không chuyển được chuyến.'); });
   }
   $('tripBtn').addEventListener('click', openTripSheet);
@@ -2004,9 +2016,24 @@ nav button.on{color:var(--sea-ink);}
     });
   }
 
-  function pullApi(){
+  var lastPulled = null;
+  function pullApi(force){
+    // Bỏ qua khi còn lệnh ghi chưa xong, hoặc vừa ghi xong chưa tới 2 giây:
+    // máy chủ có thể chưa kịp trả lại đúng bản mới. Chặn tối đa 5 lần liên
+    // tiếp để không bao giờ kẹt vĩnh viễn.
+    if(!force && skippedPulls < 5 &&
+       (pendingWrites > 0 || Date.now() - lastWriteAt < 2000)){
+      skippedPulls++;
+      return Promise.resolve();
+    }
+    skippedPulls = 0;
     return apiCall('GET','state').then(function(d){
       if(!d) return;
+      // Dữ liệu y hệt lần trước thì thôi dựng lại màn hình: dựng lại vô cớ
+      // mỗi 6 giây làm mất trạng thái đang chạm và gây cảm giác giật.
+      var sig = JSON.stringify(d);
+      if(sig === lastPulled){ setSync('Đã đồng bộ', true); return; }
+      lastPulled = sig;
       meta = Object.assign({name:'Quỹ nhóm',holderId:null,note:''}, d.meta||{});
       members = (d.members||[]).map(migrateMember).sort(function(a,b){ return (a.createdAt||0)-(b.createdAt||0); });
       expenses = (d.expenses||[]).map(migrateExpense);

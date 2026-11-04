@@ -212,6 +212,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--sea);outline-off
 .item{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);}
 .item:last-child{border-bottom:none;}
 .item.tap{cursor:pointer;}
+.item.top{align-items:flex-start;}
 .item .main{flex:1;min-width:0;}
 .item .nm{font-weight:600;}
 .item .sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px;word-break:break-word;}
@@ -414,7 +415,7 @@ nav button.on{color:var(--sea-ink);}
       <div id="statsList"></div>
     </div>
     <div class="card">
-      <div class="card-h">Ai đã đưa tiền ra</div>
+      <div class="card-h">Mục chi tiền</div>
       <div id="totalsList"></div>
     </div>
   </section>
@@ -517,6 +518,7 @@ nav button.on{color:var(--sea-ink);}
   var meta = { name:"Quỹ nhóm", holderId:null, note:"" };
   var selectedWho = [];
   var openLines = {};
+  var openPaid = {};
 
   var $ = function(id){ return document.getElementById(id); };
   function fmt(n){ return (Math.round(Number(n)||0)).toLocaleString('vi-VN') + 'đ'; }
@@ -970,9 +972,20 @@ nav button.on{color:var(--sea-ink);}
       '<div class="sub">'+expenses.length+' khoản · '+fmt(t.fromFund)+' từ quỹ</div></div>' +
       '<div class="amt out">'+fmt(t.spent)+'</div></div>' +
       Object.keys(byPayer).map(function(k){
-        var parts=k.split('|');
-        return '<div class="item"><div class="main"><div class="nm">'+esc(nameOf(parts[0]))+'</div>' +
-          '<div class="sub">'+(parts[1]==='f'?'trả bằng tiền quỹ':'ứng tiền túi')+'</div></div>' +
+        var parts=k.split('|'), payerId=parts[0], fromFund=(parts[1]==='f');
+        var mine = expenses.filter(function(e){
+          return e.payerId===payerId && !!e.fromFund===fromFund;
+        }).sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+        var open = !!openPaid[k];
+        var lines = mine.map(function(e){
+          return '<div class="pline"><span>'+esc(e.title)+'</span><span>'+fmt(e.amount)+'</span></div>';
+        }).join('');
+        return '<div class="item top"><div class="main">' +
+          '<div class="nm">'+esc(nameOf(payerId))+'</div>' +
+          '<div class="sub">'+(fromFund?'trả bằng tiền quỹ':'ứng tiền túi')+'</div>' +
+          '<button class="toggle" data-paid="'+esc(k)+'">'+
+            (open?'Ẩn chi tiết':'Xem '+mine.length+' mục đã chi')+'</button>' +
+          '<div class="plines'+(open?' open':'')+'">'+lines+'</div></div>' +
           '<div class="amt">'+fmt(byPayer[k])+'</div></div>';
       }).join('');
   }
@@ -1528,6 +1541,11 @@ nav button.on{color:var(--sea-ink);}
   $('statsList').addEventListener('click', function(ev){
     var b=ev.target.closest('[data-lines]'); if(!b) return;
     openLines[b.dataset.lines]=!openLines[b.dataset.lines];
+    renderStats(totals());
+  });
+  $('totalsList').addEventListener('click', function(ev){
+    var b=ev.target.closest('[data-paid]'); if(!b) return;
+    openPaid[b.dataset.paid]=!openPaid[b.dataset.paid];
     renderStats(totals());
   });
 

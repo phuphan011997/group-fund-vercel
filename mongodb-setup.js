@@ -43,6 +43,8 @@ ensure("members", {
     _id:     { bsonType: "string" },
     tripId:  { bsonType: "string" },
     name:    { bsonType: "string", minLength: 1 },
+    color:   { bsonType: "string", description: "khoá màu avatar: teal, blue, violet, rose, amber, green, slate, coral" },
+    icon:    { bsonType: "string", description: "emoji đại diện; rỗng thì hiện chữ cái đầu của tên" },
     deleted: { bsonType: "bool", description: "true = đã rời nhóm nhưng giữ số liệu" },
     createdAt: { bsonType: ["date", "long", "double", "int"] },
     contributions: {

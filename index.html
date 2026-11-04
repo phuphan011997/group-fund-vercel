@@ -95,6 +95,62 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 0 8px;
 .trip-row .nm{flex:1;min-width:0;font-weight:600;}
 .trip-row .now{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sea-tint);color:var(--sea-ink);}
 .trip-row .who{font-size:11px;color:var(--ink-soft);}
+/* ---- avatar thành viên: màu + icon ---- */
+.ava{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:50%;flex:0 0 auto;
+  font-size:16px;line-height:1;font-weight:700;
+  background:var(--ava-bg,var(--surface-2));color:var(--ava-fg,var(--ink-soft));
+  user-select:none;
+}
+.ava.sm{width:22px;height:22px;font-size:12px;margin-right:-2px;}
+.c-teal  {--ava-bg:#D3EAF1;--ava-fg:#0A5266;}
+.c-blue  {--ava-bg:#DCE6F8;--ava-fg:#1E3F7A;}
+.c-violet{--ava-bg:#E7DEF7;--ava-fg:#4A2E7A;}
+.c-rose  {--ava-bg:#F8DEE6;--ava-fg:#7A2A44;}
+.c-amber {--ava-bg:#F7E7C9;--ava-fg:#6B4A08;}
+.c-green {--ava-bg:#D9EDD6;--ava-fg:#255C28;}
+.c-slate {--ava-bg:#E0E5EA;--ava-fg:#37464F;}
+.c-coral {--ava-bg:#F9E0D6;--ava-fg:#7A3A22;}
+:root:not([data-theme="light"]){
+  @media (prefers-color-scheme:dark){
+    .c-teal  {--ava-bg:#17313B;--ava-fg:#8AD6EC;}
+    .c-blue  {--ava-bg:#1C2A42;--ava-fg:#9DBDF0;}
+    .c-violet{--ava-bg:#2A2140;--ava-fg:#C2A9F0;}
+    .c-rose  {--ava-bg:#3A2029;--ava-fg:#F0A0B8;}
+    .c-amber {--ava-bg:#3A2E16;--ava-fg:#E8C46A;}
+    .c-green {--ava-bg:#1D3220;--ava-fg:#9AD49C;}
+    .c-slate {--ava-bg:#28323A;--ava-fg:#B2C0C9;}
+    .c-coral {--ava-bg:#3A251B;--ava-fg:#F0A585;}
+  }
+}
+:root[data-theme="dark"]{
+  .c-teal  {--ava-bg:#17313B;--ava-fg:#8AD6EC;}
+  .c-blue  {--ava-bg:#1C2A42;--ava-fg:#9DBDF0;}
+  .c-violet{--ava-bg:#2A2140;--ava-fg:#C2A9F0;}
+  .c-rose  {--ava-bg:#3A2029;--ava-fg:#F0A0B8;}
+  .c-amber {--ava-bg:#3A2E16;--ava-fg:#E8C46A;}
+  .c-green {--ava-bg:#1D3220;--ava-fg:#9AD49C;}
+  .c-slate {--ava-bg:#28323A;--ava-fg:#B2C0C9;}
+  .c-coral {--ava-bg:#3A251B;--ava-fg:#F0A585;}
+}
+/* ô chọn màu và icon trong bảng sửa */
+.swatches{display:flex;flex-wrap:wrap;gap:9px;}
+.swatch{
+  width:38px;height:38px;border-radius:50%;cursor:pointer;padding:0;
+  border:2px solid transparent;background:var(--ava-bg);
+  display:inline-flex;align-items:center;justify-content:center;
+  color:var(--ava-fg);font-size:17px;font-weight:700;
+}
+.swatch[aria-pressed="true"]{border-color:var(--ink);}
+.icons{display:flex;flex-wrap:wrap;gap:7px;}
+.ico{
+  width:40px;height:40px;border-radius:10px;cursor:pointer;padding:0;
+  border:1px solid var(--line);background:var(--surface-2);
+  font-size:19px;line-height:1;display:inline-flex;align-items:center;justify-content:center;
+}
+.ico[aria-pressed="true"]{border-color:var(--sea);background:var(--sea-tint);}
+.ico.none{font-size:13px;font-weight:600;color:var(--ink-soft);}
 
 /* Form thêm khoản chi nằm sẵn trong trang nhưng được cất đi; khi mở thì
    chuyển nguyên node vào bottom sheet, nhờ vậy giữ nguyên mọi sự kiện đã gắn. */
@@ -727,7 +783,8 @@ nav button.on{color:var(--sea-ink);}
     return e;
   }
   function bodyOf(coll, o){
-    if(coll==='members') return {name:o.name, contributions:o.contributions||[], deleted:!!o.deleted, createdAt:o.createdAt||Date.now()};
+    if(coll==='members') return {name:o.name, color:o.color||'', icon:o.icon||'',
+      contributions:o.contributions||[], deleted:!!o.deleted, createdAt:o.createdAt||Date.now()};
     if(coll==='expenses') return {title:o.title, amount:o.amount, payerId:o.payerId, fromFund:!!o.fromFund,
                                   participantIds:o.participantIds||[], createdAt:o.createdAt||Date.now()};
     if(coll==='plans') return {title:o.title, date:o.date||'', time:o.time||'', note:o.note||'', createdAt:o.createdAt||Date.now()};
@@ -790,6 +847,29 @@ nav button.on{color:var(--sea-ink);}
   }
 
   // ================= LOG =================
+  // ---- màu và icon của thành viên ----
+  var COLOR_KEYS = ['teal','blue','violet','rose','amber','green','slate','coral'];
+  var ICON_SET = ['🙂','😎','🤓','🐱','🐶','🦊','🐼','🐧','🌵','🌊','⛰️','🍜','🍺','🎒','📷','🎸','⚽','🚗'];
+  function autoColor(id){
+    var h=0, k=String(id||'');
+    for(var i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0;
+    return COLOR_KEYS[h % COLOR_KEYS.length];
+  }
+  function colorOf(m){
+    return (m && m.color && COLOR_KEYS.indexOf(m.color)!==-1) ? m.color : autoColor(m && m.id);
+  }
+  function initialOf(m){
+    var n = String((m && m.name) || '').trim();
+    return n ? n.charAt(0).toUpperCase() : '?';
+  }
+  // Avatar: icon nếu có, không thì chữ cái đầu của tên.
+  function avatarOf(m, small){
+    if(!m) return '';
+    var inner = m.icon ? esc(m.icon) : esc(initialOf(m));
+    return '<span class="ava c-'+colorOf(m)+(small?' sm':'')+'" aria-hidden="true">'+inner+'</span>';
+  }
+  function avatarById(id, small){ return avatarOf(byId(id), small); }
+
   function logAct(text, kind){
     // who/whoName do máy chủ gắn từ phiên đăng nhập; ở chế độ chạy cục bộ
     // thì không có tài khoản nên để trống.
@@ -852,6 +932,7 @@ nav button.on{color:var(--sea-ink);}
       var holder = meta.holderId===m.id, c = contributedOf(m), n = (m.contributions||[]).length;
       var sub = m.deleted ? 'Đã rời nhóm · số liệu được giữ lại' : (n ? 'Đã đóng '+n+' lần' : 'Chưa đóng quỹ');
       return '<div class="item tap'+(m.deleted?' gone':'')+'" data-open="'+m.id+'">' +
+        avatarOf(m) +
         '<div class="main"><div class="nm">'+esc(m.name)+
           (holder?'<span class="tag'+(m.deleted?' off':'')+'">Giữ quỹ</span>':'')+'</div>' +
         '<div class="sub">'+esc(sub)+'</div></div>' +
@@ -865,7 +946,9 @@ nav button.on{color:var(--sea-ink);}
     // người đưa tiền mà không ai để ý.
     sel.innerHTML = '<option value="">' +
       (list.length ? '— chọn người —' : '— chưa có thành viên —') + '</option>' +
-      list.map(function(m){ return '<option value="'+m.id+'">'+esc(m.name)+'</option>'; }).join('');
+      list.map(function(m){
+        return '<option value="'+m.id+'">'+(m.icon ? esc(m.icon)+' ' : '')+esc(m.name)+'</option>';
+      }).join('');
     if(prev && sel.querySelector('option[value="'+prev+'"]')) sel.value = prev;
     updatePayerHint();
   }
@@ -887,7 +970,8 @@ nav button.on{color:var(--sea-ink);}
     var all = selectedWho.length === list.length;
     el.innerHTML = '<button class="chip all" type="button" data-all="1" aria-pressed="'+all+'">'+(all?'Bỏ chọn hết':'Cả nhóm')+'</button>' +
       list.map(function(m){
-        return '<button class="chip" type="button" data-who="'+m.id+'" aria-pressed="'+(selectedWho.indexOf(m.id)!==-1)+'">'+esc(m.name)+'</button>';
+        return '<button class="chip" type="button" data-who="'+m.id+'" aria-pressed="'+
+          (selectedWho.indexOf(m.id)!==-1)+'">'+avatarOf(m,true)+' '+esc(m.name)+'</button>';
       }).join('');
     $('whoHint').textContent = selectedWho.length ? 'Chia cho '+selectedWho.length+' người' : 'Chưa chọn ai — chạm vào tên để chọn.';
   }
@@ -955,7 +1039,8 @@ nav button.on{color:var(--sea-ink);}
         var verdict = Math.round(net)===0?'Vừa đủ':(net>0?'Nhận lại '+fmt(net):'Đóng thêm '+fmt(-net));
         var hold = (m.id===meta.holderId && t.overdraft>0) ? ' · Ứng bù quỹ '+fmt(t.overdraft) : '';
         return '<div class="pcard'+(m.deleted?' gone':'')+'">' +
-          '<div class="phead"><span class="nm">'+esc(m.name)+'</span><span class="verdict '+cls+'">'+verdict+'</span></div>' +
+          '<div class="phead"><span class="nm">'+avatarOf(m,true)+' '+esc(m.name)+'</span>' +
+          '<span class="verdict '+cls+'">'+verdict+'</span></div>' +
           '<div class="pmeta">Đóng quỹ '+fmt(c)+(adv>0?' · Ứng tiền túi '+fmt(adv):'')+hold+' · Phần phải chịu '+fmt(sh)+'</div>' +
           '<button class="toggle" data-lines="'+m.id+'">'+(open?'Ẩn chi tiết':'Xem '+mine.length+' mục đã tham gia')+'</button>' +
           '<div class="plines'+(open?' open':'')+'">'+lines+'</div></div>';
@@ -981,7 +1066,7 @@ nav button.on{color:var(--sea-ink);}
           return '<div class="pline"><span>'+esc(e.title)+'</span><span>'+fmt(e.amount)+'</span></div>';
         }).join('');
         return '<div class="item top"><div class="main">' +
-          '<div class="nm">'+esc(nameOf(payerId))+'</div>' +
+          '<div class="nm">'+avatarById(payerId,true)+' '+esc(nameOf(payerId))+'</div>' +
           '<div class="sub">'+(fromFund?'trả bằng tiền quỹ':'ứng tiền túi')+'</div>' +
           '<button class="toggle" data-paid="'+esc(k)+'">'+
             (open?'Ẩn chi tiết':'Xem '+mine.length+' mục đã chi')+'</button>' +
@@ -1014,6 +1099,7 @@ nav button.on{color:var(--sea-ink);}
     if(!n){ $('mName').focus(); return; }
     var amt = Number(digits($('mMoney').value))||0;
     var m = { id:newId(), name:n, deleted:false, createdAt:Date.now(),
+              color: COLOR_KEYS[members.length % COLOR_KEYS.length], icon:'',
               contributions: amt>0 ? [{id:newId(), amount:amt, at:Date.now()}] : [] };
     members.push(m); put('members', m);
     if(!meta.holderId){ meta.holderId=m.id; putMeta(); }
@@ -1039,10 +1125,11 @@ nav button.on{color:var(--sea-ink);}
             '<button class="x" data-rmc="'+x.id+'" aria-label="Xoá lần đóng này">✕</button></div>';
         }).join('') + '</div>'
       : '<p class="msg">Chưa có lần đóng quỹ nào.</p>';
-    var html = '<h3>'+esc(m.name)+(m.deleted?' (đã rời nhóm)':'')+'</h3>' +
+    var html = '<h3>'+avatarOf(m,true)+' '+esc(m.name)+(m.deleted?' (đã rời nhóm)':'')+'</h3>' +
       '<p class="msg">Đã đóng quỹ '+fmt(c)+(holder?' · đang giữ quỹ':'')+'</p>' + histHtml +
       (m.deleted ? '<button class="btn" data-a="restore">Đưa lại vào nhóm</button>'
         : '<button class="btn" data-a="contrib">Đóng quỹ</button>' +
+          '<button class="btn ghost" data-a="edit">Sửa tên, màu, icon</button>' +
           (holder?'':'<button class="btn ghost" data-a="holder">Đặt làm người giữ quỹ</button>') +
           '<button class="btn danger" data-a="remove">Xoá khỏi nhóm</button>') +
       '<button class="btn ghost" data-a="close">Đóng</button>';
@@ -1067,12 +1154,79 @@ nav button.on{color:var(--sea-ink);}
       });
     }).then(function(act){
       if(act==='contrib') doContribute(m);
+      else if(act==='edit') editMember(m);
       else if(act==='holder') doChangeHolder(m);
       else if(act==='remove') doRemove(m);
       else if(act==='restore'){
         m.deleted=false; put('members', m);
         logAct('đưa '+m.name+' trở lại nhóm'); render();
       }
+    });
+  }
+
+  function editMember(m){
+    var color = colorOf(m), icon = m.icon || '';
+    function swatches(){
+      return COLOR_KEYS.map(function(k){
+        return '<button class="swatch c-'+k+'" type="button" data-color="'+k+'" aria-pressed="'+
+          (k===color)+'" aria-label="Màu '+k+'">'+(k===color?'✓':'')+'</button>';
+      }).join('');
+    }
+    function icons(){
+      return '<button class="ico none" type="button" data-icon="" aria-pressed="'+(!icon)+'">Chữ</button>' +
+        ICON_SET.map(function(ic){
+          return '<button class="ico" type="button" data-icon="'+esc(ic)+'" aria-pressed="'+
+            (ic===icon)+'">'+esc(ic)+'</button>';
+        }).join('');
+    }
+    var html = '<h3>Sửa thông tin</h3>' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">' +
+        '<span id="emPreview"></span>' +
+        '<span class="sub" style="font-size:13px;color:var(--ink-soft);">Xem trước</span></div>' +
+      '<label class="f" for="emName">Tên</label>' +
+      '<input type="text" id="emName" value="'+esc(m.name)+'" autocomplete="off">' +
+      '<label class="f mt">Màu</label><div class="swatches" id="emColors">'+swatches()+'</div>' +
+      '<label class="f mt">Icon</label><div class="icons" id="emIcons">'+icons()+'</div>' +
+      '<button class="btn mt" data-a="save">Lưu thay đổi</button>' +
+      '<button class="btn ghost sheet-cancel" data-a="">Huỷ</button>';
+
+    openSheet(html, function(root){
+      function preview(){
+        root.querySelector('#emPreview').innerHTML =
+          avatarOf({id:m.id, name:root.querySelector('#emName').value || m.name,
+                    color:color, icon:icon});
+      }
+      preview();
+      root.querySelector('#emName').addEventListener('input', preview);
+      root.querySelector('#emColors').addEventListener('click', function(ev){
+        var b=ev.target.closest('[data-color]'); if(!b) return;
+        color = b.dataset.color;
+        root.querySelector('#emColors').innerHTML = swatches();
+        preview();
+      });
+      root.querySelector('#emIcons').addEventListener('click', function(ev){
+        var b=ev.target.closest('[data-icon]'); if(!b) return;
+        icon = b.dataset.icon;
+        root.querySelector('#emIcons').innerHTML = icons();
+        preview();
+      });
+      root.querySelectorAll('[data-a]').forEach(function(b){
+        b.addEventListener('click', function(){
+          if(b.dataset.a==='save'){
+            closeSheet({a:'save', name:root.querySelector('#emName').value.trim()});
+          } else closeSheet(null);
+        });
+      });
+    }).then(function(r){
+      if(!r || r.a!=='save') return;
+      if(!r.name){ showBanner('Tên không được để trống.'); return; }
+      var oldName = m.name, doiTen = (r.name !== oldName);
+      m.name = r.name; m.color = color; m.icon = icon;
+      put('members', m);
+      logAct(doiTen ? 'đổi tên "'+oldName+'" thành "'+r.name+'"'
+                    : 'đổi màu/icon của '+r.name);
+      showBanner('');
+      render();
     });
   }
 

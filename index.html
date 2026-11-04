@@ -143,7 +143,13 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 0 8px;
   color:var(--ava-fg);font-size:17px;font-weight:700;
 }
 .swatch[aria-pressed="true"]{border-color:var(--ink);}
-.icons{display:flex;flex-wrap:wrap;gap:7px;}
+.icons{
+  display:flex;flex-wrap:wrap;gap:7px;
+  /* Bộ icon dài; cho cuộn riêng để nút Lưu không bị đẩy khỏi tầm nhìn
+     trên màn hình nhỏ. */
+  max-height:184px;max-height:min(184px,26dvh);overflow-y:auto;overscroll-behavior:contain;
+  padding:2px;margin:0 -2px;
+}
 .ico{
   width:40px;height:40px;border-radius:10px;cursor:pointer;padding:0;
   border:1px solid var(--line);background:var(--surface-2);
@@ -859,7 +865,12 @@ nav button.on{color:var(--sea-ink);}
   // ================= LOG =================
   // ---- màu và icon của thành viên ----
   var COLOR_KEYS = ['teal','blue','violet','rose','amber','green','slate','coral'];
-  var ICON_SET = ['🙂','😎','🤓','🐱','🐶','🦊','🐼','🐧','🌵','🌊','⛰️','🍜','🍺','🎒','📷','🎸','⚽','🚗'];
+  var ICON_SET = [
+    '🙂','😎','🤓',
+    '🐱','🐶','🦊','🐼','🐧','🐻','🐨','🐯','🦁','🐵','🐰','🐹','🐸','🐥','🦉',
+    '🦄','🐢','🐬','🐙','🦋','🐝','🦜','🦈','🐳','🦒','🐘','🦔',
+    '🌵','🌊','⛰️','🍜','🍺','🎒','📷','🎸','⚽','🚗'
+  ];
   function autoColor(id){
     var h=0, k=String(id||'');
     for(var i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0;

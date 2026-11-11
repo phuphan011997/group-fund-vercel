@@ -376,6 +376,15 @@ module.exports = async function handler(req, res) {
       const id = rest[1];
       if (!COLLS.has(coll)) return res.status(400).json({ error: "bad_collection" });
 
+      // Khoản chi chỉ người đã nhập hoặc admin mới sửa/xoá được. Khoản cũ
+      // chưa ghi người nhập thì để admin xử lý.
+      async function canTouchExpense() {
+        if (isAdmin) return true;
+        const cur = await db.collection("expenses").findOne({ _id: id, tripId });
+        if (!cur) return true;                    // tạo mới thì ai cũng được
+        return cur.createdBy === me._id;
+      }
+
       if (req.method === "PUT") {
         const body = Object.assign({}, readBody(req));
         delete body._id;
@@ -387,6 +396,19 @@ module.exports = async function handler(req, res) {
           body.who = me._id;
           body.whoName = me.name || me._id;
         }
+        if (coll === "expenses") {
+          const cur = await db.collection("expenses").findOne({ _id: id, tripId });
+          if (cur && !isAdmin && cur.createdBy !== me._id) {
+            return res.status(403).json({ error: "not_your_expense" });
+          }
+          // Người nhập cũng do máy chủ gắn, và không đổi khi sửa.
+          delete body.createdBy;
+          delete body.createdByName;
+          if (!cur) {
+            body.createdBy = me._id;
+            body.createdByName = me.name || me._id;
+          }
+        }
         await db.collection(coll).updateOne(
           { _id: id },
           { $set: Object.assign({}, body, { tripId }) },
@@ -395,6 +417,9 @@ module.exports = async function handler(req, res) {
         return res.status(204).end();
       }
       if (req.method === "DELETE") {
+        if (coll === "expenses" && !(await canTouchExpense())) {
+          return res.status(403).json({ error: "not_your_expense" });
+        }
         await db.collection(coll).deleteOne({ _id: id, tripId });
         return res.status(204).end();
       }

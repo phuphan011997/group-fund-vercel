@@ -666,7 +666,9 @@ nav button.on{color:var(--sea-ink);}
       if(wire) wire($('sheet'));
     });
   }
-  $('scrim').addEventListener('click', function(ev){ if(ev.target === $('scrim')) closeSheet(null); });
+  $('scrim').addEventListener('click', function(ev){
+    if(ev.target === $('scrim')){ editingExpenseId = null; closeSheet(null); }
+  });
 
   // Khi bàn phím hiện lên, trình duyệt thu nhỏ vùng nhìn thấy nhưng phần tử
   // position:fixed vẫn bám theo khung cũ, nên đáy sheet nằm lọt sau bàn phím
@@ -698,7 +700,9 @@ nav button.on{color:var(--sea-ink);}
       if(el.scrollIntoView) el.scrollIntoView({block:'nearest', behavior:'smooth'});
     }, 180);
   });
-  document.addEventListener('keydown', function(ev){ if(ev.key==='Escape' && sheetResolve) closeSheet(null); });
+  document.addEventListener('keydown', function(ev){
+    if(ev.key==='Escape' && sheetResolve){ editingExpenseId = null; closeSheet(null); }
+  });
 
   function askConfirm(o){
     var html = '<h3>'+esc(o.title)+'</h3>' +
@@ -792,6 +796,7 @@ nav button.on{color:var(--sea-ink);}
     if(coll==='members') return {name:o.name, color:o.color||'', icon:o.icon||'',
       contributions:o.contributions||[], deleted:!!o.deleted, createdAt:o.createdAt||Date.now()};
     if(coll==='expenses') return {title:o.title, amount:o.amount, payerId:o.payerId, fromFund:!!o.fromFund,
+      createdBy:o.createdBy||'', createdByName:o.createdByName||'',
                                   participantIds:o.participantIds||[], createdAt:o.createdAt||Date.now()};
     if(coll==='plans') return {title:o.title, date:o.date||'', time:o.time||'', note:o.note||'', createdAt:o.createdAt||Date.now()};
     if(coll==='logs') return {at:o.at, who:o.who||'', whoName:o.whoName||'', text:o.text||'', kind:o.kind||''};
@@ -848,12 +853,22 @@ nav button.on{color:var(--sea-ink);}
   function put(coll, o){
     var body = bodyOf(coll, o);
     if(mode==='claude') db.doc(coll+'/'+o.id).set(body).catch(onErr);
-    else if(mode==='api') apiCall('PUT', coll+'/'+encodeURIComponent(o.id), body).catch(function(){ showBanner('Không gửi được lên máy chủ.'); });
+    else if(mode==='api') apiCall('PUT', coll+'/'+encodeURIComponent(o.id), body).catch(function(err){
+      showBanner(err && err.status===403
+        ? 'Chỉ người đã nhập hoặc quản trị viên mới sửa được khoản này.'
+        : 'Không gửi được lên máy chủ.');
+      if(err && err.status===403) pullApi(true);
+    });
     else saveLocal();
   }
   function drop(coll, id){
     if(mode==='claude') db.doc(coll+'/'+id).delete().catch(onErr);
-    else if(mode==='api') apiCall('DELETE', coll+'/'+encodeURIComponent(id)).catch(function(){ showBanner('Không gửi được lên máy chủ.'); });
+    else if(mode==='api') apiCall('DELETE', coll+'/'+encodeURIComponent(id)).catch(function(err){
+      showBanner(err && err.status===403
+        ? 'Chỉ người đã nhập hoặc quản trị viên mới xoá được khoản này.'
+        : 'Không gửi được lên máy chủ.');
+      if(err && err.status===403) pullApi(true);
+    });
     else saveLocal();
   }
   function putMeta(){
@@ -1005,11 +1020,17 @@ nav button.on{color:var(--sea-ink);}
       var p=e.participantIds||[], liveCount=alive().length;
       var who = (p.length && p.length===liveCount && p.every(function(id){ return !isGone(id); })) ? 'cả nhóm'
         : p.map(function(id){ return nameOf(id); }).join(', ');
-      return '<div class="item"><div class="main"><div class="nm">'+esc(e.title)+'</div>' +
+      var sua = canEditExpense(e);
+      var nguoiNhap = e.createdByName || e.createdBy;
+      return '<div class="item'+(sua?' tap':'')+'"'+(sua?' data-edit="'+e.id+'"':'')+'>' +
+        '<div class="main"><div class="nm">'+esc(e.title)+'</div>' +
         '<div class="sub">'+esc(nameOf(e.payerId))+' đưa tiền'+(e.fromFund?' · trừ vào quỹ':' · tiền túi')+
-        ' · chia cho '+esc(who)+(p.length?' ('+fmt((Number(e.amount)||0)/p.length)+'/người)':'')+'</div></div>' +
+        ' · chia cho '+esc(who)+(p.length?' ('+fmt((Number(e.amount)||0)/p.length)+'/người)':'')+
+        (nguoiNhap?'<br>'+esc(nguoiNhap)+' nhập':'')+'</div></div>' +
         '<div class="amt out">'+fmt(e.amount)+'</div>' +
-        '<button class="x" data-del="'+e.id+'" aria-label="Xoá">✕</button></div>';
+        (sua ? '<button class="x" data-del="'+e.id+'" aria-label="Xoá">✕</button>'
+             : '<span class="go" title="Chỉ người nhập hoặc quản trị viên mới sửa được">🔒</span>') +
+        '</div>';
     }).join('');
   }
 
@@ -1391,6 +1412,15 @@ nav button.on{color:var(--sea-ink);}
   });
   $('eTitle').addEventListener('input', renderTitleQuick);
 
+  // Chỉ người đã nhập hoặc admin mới sửa/xoá được khoản chi. Khoản cũ chưa
+  // ghi người nhập thì để admin xử lý. Chạy cục bộ (không đăng nhập) thì mở.
+  function canEditExpense(e){
+    if(!ME) return true;
+    if(ME.role === 'admin') return true;
+    return !!e && e.createdBy === ME.username;
+  }
+  var editingExpenseId = null;   // null = đang thêm mới
+
   function expenseErr(msg){
     var e = $('eErr');
     if(!msg){ e.hidden = true; return; }
@@ -1398,28 +1428,42 @@ nav button.on{color:var(--sea-ink);}
   }
   // Mở form trong bottom sheet: chuyển nguyên node sang nên mọi sự kiện,
   // gợi ý số tiền và lựa chọn đang có đều giữ nguyên.
-  function openExpenseSheet(){
+  function openExpenseSheet(edit){
     if(!alive().length){
       showBanner('Thêm thành viên trước khi ghi khoản chi.');
       return;
     }
+    editingExpenseId = edit ? edit.id : null;
+    if(edit){
+      $('eTitle').value = edit.title || '';
+      $('eAmount').value = groupNum(String(edit.amount||0));
+      $('ePayer').value = edit.payerId || '';
+      selectedWho = (edit.participantIds||[]).filter(function(id){ return !isGone(id); });
+    } else {
+      $('eTitle').value=''; $('eAmount').clearMoney();
+      $('ePayer').value=''; selectedWho=[];
+    }
+    renderWho(); updatePayerHint();
+    $('addExpense').textContent = edit ? 'Lưu thay đổi' : 'Thêm khoản chi';
     expenseErr('');
     renderTitleQuick();
     sheetResolve = null;
-    $('sheet').innerHTML = '<h3>Khoản chi mới</h3>';
+    $('sheet').innerHTML = '<h3>'+(edit ? 'Sửa khoản chi' : 'Khoản chi mới')+'</h3>';
     $('sheet').appendChild($('expenseForm'));
     var cancel = document.createElement('button');
     cancel.className = 'btn ghost sheet-cancel';
     cancel.type = 'button';
     cancel.textContent = 'Huỷ';
-    cancel.addEventListener('click', function(){ closeSheet(null); });
+    cancel.addEventListener('click', function(){ editingExpenseId = null; closeSheet(null); });
     $('sheet').appendChild(cancel);
     $('scrim').classList.add('on');
     document.body.classList.add('locked');
     $('sheet').scrollTop = 0;
     fitScrim();
   }
-  $('openExpense').addEventListener('click', openExpenseSheet);
+  // Bọc trong hàm ẩn danh: gắn thẳng openExpenseSheet sẽ nhận đối tượng sự
+  // kiện làm tham số edit, và app tưởng đang sửa một khoản chi.
+  $('openExpense').addEventListener('click', function(){ openExpenseSheet(); });
 
   $('addExpense').addEventListener('click', function(){
     var title=$('eTitle').value.trim();
@@ -1448,11 +1492,27 @@ nav button.on{color:var(--sea-ink);}
   });
 
   function commitExpense(title, amount, payerId, fromFund, who){
-    var e={id:newId(), title:title, amount:amount, payerId:payerId, fromFund:fromFund,
-           participantIds:who, createdAt:Date.now()};
-    expenses.push(e); put('expenses', e);
-    logAct('ghi khoản chi "'+title+'" '+fmt(amount)+', '+nameOf(payerId)+' đưa tiền'+
-           (fromFund?' từ quỹ':' tiền túi')+', chia cho '+who.length+' người');
+    var editing = editingExpenseId && expenses.find(function(x){ return x.id===editingExpenseId; });
+    if(editing){
+      var cu = {t:editing.title, a:editing.amount, p:editing.payerId, n:(editing.participantIds||[]).length};
+      editing.title=title; editing.amount=amount; editing.payerId=payerId;
+      editing.fromFund=fromFund; editing.participantIds=who;
+      put('expenses', editing);
+      var doi=[];
+      if(cu.t!==title) doi.push('tên thành "'+title+'"');
+      if(cu.a!==amount) doi.push('số tiền '+fmt(cu.a)+' thành '+fmt(amount));
+      if(cu.p!==payerId) doi.push('người đưa tiền thành '+nameOf(payerId));
+      if(cu.n!==who.length) doi.push('số người chia thành '+who.length);
+      logAct('sửa khoản chi "'+cu.t+'"'+(doi.length?': '+doi.join(', '):''));
+      editingExpenseId = null;
+    } else {
+      var e={id:newId(), title:title, amount:amount, payerId:payerId, fromFund:fromFund,
+             participantIds:who, createdAt:Date.now(),
+             createdBy: ME ? ME.username : '', createdByName: ME ? ME.name : ''};
+      expenses.push(e); put('expenses', e);
+      logAct('ghi khoản chi "'+title+'" '+fmt(amount)+', '+nameOf(payerId)+' đưa tiền'+
+             (fromFund?' từ quỹ':' tiền túi')+', chia cho '+who.length+' người');
+    }
     $('eTitle').value=''; $('eAmount').clearMoney(); selectedWho=[];
     $('ePayer').value=''; renderTitleQuick(); expenseErr('');
     // Không focus lại ô tên: sheet đã đóng, focus sẽ bật bàn phím lên vô cớ.
@@ -1460,6 +1520,12 @@ nav button.on{color:var(--sea-ink);}
   }
 
   $('expenseList').addEventListener('click', function(ev){
+    var row = ev.target.closest('[data-edit]');
+    if(row && !ev.target.closest('[data-del]')){
+      var ex = expenses.find(function(x){ return x.id===row.dataset.edit; });
+      if(ex && canEditExpense(ex)) openExpenseSheet(ex);
+      return;
+    }
     var b=ev.target.closest('[data-del]'); if(!b) return;
     var id=b.dataset.del, e=expenses.find(function(x){ return x.id===id; });
     if(!e) return;
@@ -1468,6 +1534,7 @@ nav button.on{color:var(--sea-ink);}
       ok:'Xoá', danger:true})
     .then(function(ok){
       if(!ok) return;
+      if(!canEditExpense(e)){ showBanner('Chỉ người đã nhập hoặc quản trị viên mới xoá được khoản này.'); return; }
       expenses = expenses.filter(function(x){ return x.id!==id; });
       drop('expenses', id);
       logAct('xoá khoản chi "'+e.title+'" '+fmt(e.amount), 'del');

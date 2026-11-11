@@ -80,7 +80,9 @@ ensure("expenses", {
       items: { bsonType: "string" },
       description: "những người cùng chịu khoản này, chia đều"
     },
-    createdAt: { bsonType: ["date", "long", "double", "int"] }
+    createdAt: { bsonType: ["date", "long", "double", "int"] },
+    createdBy: { bsonType: "string", description: "username người nhập, máy chủ tự gắn; chỉ người này hoặc admin mới sửa/xoá được" },
+    createdByName: { bsonType: "string", description: "tên hiển thị tại thời điểm nhập" }
   }
 });
 

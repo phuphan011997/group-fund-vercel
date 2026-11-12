@@ -95,6 +95,42 @@ header{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 0 8px;
 .trip-row .nm{flex:1;min-width:0;font-weight:600;}
 .trip-row .now{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sea-tint);color:var(--sea-ink);}
 .trip-row .who{font-size:11px;color:var(--ink-soft);}
+/* ---- chip người: nền màu riêng của từng người ---- */
+.pchip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:999px;white-space:nowrap;line-height:1.3;
+  background:var(--ava-bg,var(--surface-2));color:var(--ava-fg,var(--ink-soft));
+  font-size:12px;font-weight:600;
+}
+.pchip .ic{font-size:12px;line-height:1;}
+/* ---- khối chi tiết: nhãn in hoa nhỏ bên trái, nội dung bên phải ---- */
+.dx{
+  margin:8px 0 0;padding:7px 10px;
+  border-left:3px solid var(--sea);border-radius:0 9px 9px 0;
+  background:var(--surface-2);
+  display:flex;flex-direction:column;gap:6px;
+}
+/* Nhãn đặt trên thay vì bên trái: nhãn bên trái ăn mất hơn nửa chỗ của
+   hàng chip trên màn hẹp, khiến mỗi chip rơi xuống một dòng. */
+.dx .ln{display:block;}
+.dx b{
+  display:block;margin-bottom:4px;
+  font-size:10px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-soft);
+}
+.dx b i{
+  font-style:normal;text-transform:none;letter-spacing:0;
+  font-weight:500;margin-left:6px;font-variant-numeric:tabular-nums;
+}
+.dx .vl{display:flex;flex-wrap:wrap;gap:5px;align-items:center;}
+.src{
+  font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;
+  background:var(--sea-tint);color:var(--sea-ink);white-space:nowrap;
+}
+.src.own{background:var(--surface);color:var(--sun);border:1px solid var(--line);}
+.each{font-size:11.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+
+.by{font-size:11.5px;color:var(--ink-soft);margin-top:6px;}
 /* ---- avatar thành viên: màu + icon ---- */
 .ava{
   display:inline-flex;align-items:center;justify-content:center;
@@ -904,6 +940,15 @@ nav button.on{color:var(--sea-ink);}
     var inner = m.icon ? esc(m.icon) : esc(initialOf(m));
     return '<span class="ava c-'+colorOf(m)+(small?' sm':'')+'" aria-hidden="true">'+inner+'</span>';
   }
+  // Chip tên người, nền lấy theo màu avatar của họ.
+  function pchipOf(id){
+    var m = byId(id);
+    if(!m) return '<span class="pchip">'+esc(nameOf(id))+'</span>';
+    return '<span class="pchip c-'+colorOf(m)+'">' +
+      (m.icon ? '<span class="ic">'+esc(m.icon)+'</span>' : '') +
+      esc(m.name) + '</span>';
+  }
+
   function avatarById(id, small){ return avatarOf(byId(id), small); }
 
   function logAct(text, kind){
@@ -1012,21 +1057,41 @@ nav button.on{color:var(--sea-ink);}
     $('whoHint').textContent = selectedWho.length ? 'Chia cho '+selectedWho.length+' người' : 'Chưa chọn ai — chạm vào tên để chọn.';
   }
 
+  // Chia cho cả nhóm thì không liệt kê từng tên: chỉ một nhãn kèm dãy avatar,
+  // vừa gọn vừa đủ rõ. Chia cho một phần mới cần biết chính xác những ai.
+  function chiaCho(e, p){
+    if(!p.length) return '<span class="each">chưa chọn ai</span>';
+    var song = alive();
+    var caNhom = p.length === song.length && song.every(function(m){ return p.indexOf(m.id)!==-1; });
+    if(caNhom){
+      return '<span class="src">Cả nhóm</span>' +
+        p.map(function(id){ return avatarById(id, true); }).join('');
+    }
+    return p.map(pchipOf).join('');
+  }
+
   function renderExpenses(){
     var el=$('expenseList');
     if(!expenses.length){ el.innerHTML='<div class="empty">Chưa có khoản chi nào.</div>'; return; }
     var list = expenses.slice().sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
     el.innerHTML = list.map(function(e){
-      var p=e.participantIds||[], liveCount=alive().length;
-      var who = (p.length && p.length===liveCount && p.every(function(id){ return !isGone(id); })) ? 'cả nhóm'
-        : p.map(function(id){ return nameOf(id); }).join(', ');
+      var p = e.participantIds || [];
       var sua = canEditExpense(e);
       var nguoiNhap = e.createdByName || e.createdBy;
-      return '<div class="item'+(sua?' tap':'')+'"'+(sua?' data-edit="'+e.id+'"':'')+'>' +
-        '<div class="main"><div class="nm">'+esc(e.title)+'</div>' +
-        '<div class="sub">'+esc(nameOf(e.payerId))+' đưa tiền'+(e.fromFund?' · trừ vào quỹ':' · tiền túi')+
-        ' · chia cho '+esc(who)+(p.length?' ('+fmt((Number(e.amount)||0)/p.length)+'/người)':'')+
-        (nguoiNhap?'<br>'+esc(nguoiNhap)+' nhập':'')+'</div></div>' +
+      var moiNguoi = p.length ? fmt((Number(e.amount)||0)/p.length) + '/người' : '';
+      return '<div class="item top'+(sua?' tap':'')+'"'+(sua?' data-edit="'+e.id+'"':'')+'>' +
+        '<div class="main">' +
+          '<div class="nm">'+esc(e.title)+'</div>' +
+          '<div class="dx">' +
+            '<div class="ln"><b>Ai chi</b><span class="vl">'+pchipOf(e.payerId)+
+              '<span class="src'+(e.fromFund?'':' own')+'">'+
+              (e.fromFund?'từ quỹ':'tiền túi')+'</span></span></div>' +
+            // "600đ/người" nằm cạnh nhãn, không chen vào hàng chip
+            '<div class="ln"><b>Chia cho'+(moiNguoi?'<i>'+moiNguoi+'</i>':'')+'</b>' +
+              '<span class="vl">'+ chiaCho(e, p) +'</span></div>' +
+          '</div>' +
+          (nguoiNhap ? '<div class="by">'+esc(nguoiNhap)+' nhập</div>' : '') +
+        '</div>' +
         '<div class="amt out">'+fmt(e.amount)+'</div>' +
         (sua ? '<button class="x" data-del="'+e.id+'" aria-label="Xoá">✕</button>'
              : '<span class="go" title="Chỉ người nhập hoặc quản trị viên mới sửa được">🔒</span>') +
